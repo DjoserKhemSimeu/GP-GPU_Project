@@ -112,4 +112,14 @@ extern "C" __global__ void MatMul(float* A, float* B, float* C, int ARows, int A
            (blockIdx.x * blockDim.x)+ threadIdx.x] = CValue;
 }
 ```
-
+### Memory managment 
+To implement this gpu parallelization for matrices operation in an efficient way, I must pay attention to the memory managment of my model, for instance, if at each time I want to computa a matrix operation on gpu i need to pay the communication cost of moving my data from the cpu to the gpu, it will not bee efficient. It that context I must think at which data would stay on gpu:
++ The weigths W1,W2,B1,B2
++ The datapoints "X"?
+And also I must think about which functions would be computed on gpu or cpu : 
++ Initialisation of the weights : cpu
++ matrix operation : gpu
++ activation function : gpu
++ gradient descent : gpu
++ forward function : gpu
++ accuracy computation :cpu

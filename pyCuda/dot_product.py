@@ -1,6 +1,7 @@
 import pycuda.autoinit
 import pycuda.driver as drv
 import numpy as np
+import time
 from pycuda.compiler import SourceModule
 
 def dot_product(v1, v2):
@@ -35,7 +36,7 @@ o_gpu = drv.mem_alloc(o.nbytes)
 drv.memcpy_htod(a_gpu, a)
 drv.memcpy_htod(b_gpu, b)
 
-
+start_gpu=time.time()
 dot(a_gpu, b_gpu, o_gpu, np.int32(n), block=(block_size, 1, 1), grid=(grid_size, 1), shared=block_size * a.dtype.itemsize)
 
 
@@ -54,6 +55,18 @@ while grid_size > 1:
     o_gpu = temp_o_gpu
 
 drv.memcpy_dtoh(o, o_gpu)
+end_gpu=time.time()
 
 print("Result :", o[0])
-print("Expected :", dot_product(a, b))
+print("Gpu time :", end_gpu-start_gpu)
+
+start_cpu=time.time()
+res=dot_product(a,b)
+end_cpu=time.time()
+start_np=time.time()
+res_np=np.dot(a,b)
+end_np=time.time()
+print("Expected :", res)
+print("Cpu time :", end_cpu-start_cpu)
+print("Numpy time :", end_np-start_np)
+

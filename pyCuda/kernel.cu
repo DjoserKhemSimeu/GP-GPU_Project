@@ -20,6 +20,7 @@ extern "C" __global__ void dot_product(float *v1, float *v2, float *o, int n) {
     }
 }
 
+
 extern "C" __global__ void reduce(float *v1, float *o, int n) {
     extern __shared__ float sdata2[];
     unsigned int tid = threadIdx.x;
@@ -81,4 +82,9 @@ extern "C" __global__ void MatMul(float* A, float* B, float* C, int ARows, int A
         C[((blockIdx.y * blockDim.y + threadIdx.y)*CCols) +
            (blockIdx.x * blockDim.x)+ threadIdx.x] = CValue;
 }
-
+extern "C" __global__ void transpose(float *in, float *out, unsigned int nx, unsigned int ny){
+	unsigned int ix=blockDim.x * blockIdx.x + threadIdx.x;
+	unsigned int iy=blockDim.y * blockIdx.y + threadIdx.y;
+	if (ix>=nx || iy>=ny) return;
+	out[iy*nx + ix]=in[ix*ny + iy];
+}
