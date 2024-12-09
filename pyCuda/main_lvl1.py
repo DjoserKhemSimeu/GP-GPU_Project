@@ -87,7 +87,7 @@ def dot_product(v1, v2):
     dot(a_gpu, b_gpu, o_gpu, np.int32(n), block=(block_size, 1, 1), grid=(grid_size, 1), shared=block_size * a.dtype.itemsize)
 
 
-    drv.memcpy_dtoh(o, o_gpu)
+    #drv.memcpy_dtoh(o, o_gpu)
 
     while grid_size > 1:
         n = grid_size
@@ -198,6 +198,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         
         # Forward propagation (copy/paste inside forward_function previously defined)
         z1 = forward_layer(X, W1, b1)  # Output of the first layer
+        print (z1)
         a1 = [[sigmoid(z) for z in z_row] for z_row in z1]  # Sigmoid activation of the first layer
         z2 =  forward_layer(a1, W2, b2)  # Output of the second layer
         exp_scores = [[exp(z) for z in z_row] for z_row in z2]# Compute exp(z2)
@@ -219,10 +220,11 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         #Application of the chainning rule 
         dW2 = matrix_multiplication(transpose(a1), delta2)  # Gradient of the weights between the hidden layer and the output layer
         db2 = [sum(d2_row) for d2_row in transpose(delta2)]  # Gradient of the biais of the output layer
-
+        
         #Computing delta1 from delta2, W2 and z1
         delta1 =matrix_multiplication(delta2, transpose(W2))  
         delta1 = [[sigmoid_derivative(z)*d1 for z,d1 in zip(z1_row,d1_row)] for z1_row, d1_row in zip(z1,delta1)]
+        #print(z1)
         dW1 = matrix_multiplication(transpose(X), delta1)  # Gradient of the weights between the input layer and the hidden layer
         db1 = [sum(d1_row) for d1_row in transpose(delta1)]  # Gradient of the biais of the hidden layer
         
@@ -254,7 +256,7 @@ def predict(model, x):
 ########################## TEST ########################## number of examples in the training set
 
 np.random.seed(1)
-X, y = sklearn.datasets.make_moons(300, noise=0.20)
+X, y = sklearn.datasets.make_moons(16, noise=0.20)
 
 N =  len(X) #TODO size of the dataset
 
@@ -265,7 +267,7 @@ d_input = 2 #TODO 2 input features (x,y for each datpoints)
 d_output = 2 #TODO to final classes for our classification problem
 
 # dimension of the hidden layer i.e. number of neurons in the hidden layer
-d_hidden = 32 #TODO 
+d_hidden = 4 #TODO 
 
 
 
