@@ -127,3 +127,79 @@ And also I must think about which functions would be computed on gpu or cpu :
 # Thursday 12 december
 The goal is to modify the trainning function to stabilyze the learning. Actually the $plot_decision_boundary$ plot a quasi-random decision frontie after 1000 epochs:
 ![decision_boundary](images/Figure_1.png)
+
+``` shell
+Loss at epoch 996: 14.352945
+Loss at epoch 997: 14.350966
+Loss at epoch 998: 14.348990
+Loss at epoch 999: 14.347015
+The final accuracy obtained is : 0.5
+```
+
+## Kernel level unitary tests
+In previous sessions, I tests the succession Cuda kernels functions of the global trainning function ```train_model``` until the update of the parameters of the model. I test the results of the GPU kernels by comparing their results with the ones obtain by following the code of the trainning function of the numlpy version of the code in the ```MLP``` file.Here we have the code to test the ```update_weights``` kernel for the computation of the update of the weights between the inputs and the hidden layer:
+
+``` python
+update_weights(W1, dW1_gpu, new_W1, np.float32(epsilon), np.int32(K1), np.int32(M),
+                        block=(TILE_DIM, 1, 1), 
+                        grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+
+new_W1_h=np.zeros_like(model["W1_np"])
+drv.memcpy_dtoh(new_W1_h,new_W1)
+print("Result update_weights :")
+print(new_W1_h)
+print("Diff with previous")
+print(new_W1_h-model["W1_np"])
+new_W1_cpu=model["W1_np"]-epsilon*dW1_cpu
+print("Diff with expected :")
+print(new_W1_cpu-new_W1_h)
+```
+And here we have the results of this test:
+
+``` shell
+Result update_weights :
+[[ 0.33000475 -0.47950882 -0.4184031  -0.29940444 -0.4143973   0.00480782
+  -0.03123364 -0.15603122 -0.0085421   0.41625935  0.5108493   0.09920254
+   0.2299091  -0.4439389  -0.39621022  0.00283959 -0.31804097  0.34292245
+   0.02414407 -0.0672569   0.40444353 -0.12894303  0.19124515 -0.24538928
+  -0.39793628 -0.11630772 -0.05905307 -0.4865129   0.3345102  -0.2762262
+  -0.34296715  0.2374873 ]
+ [-0.31329003 -0.09615654  0.09503268 -0.04258019 -0.41477054  0.4193387
+   0.43166313  0.30550686 -0.19578311  0.05409471 -0.21222883  0.08702808
+   0.5390163  -0.19353321  0.1588206  -0.18281867  0.3264101  -0.14595002
+   0.37945005  0.28425345  0.25978363 -0.00744505 -0.23442174 -0.4588402
+  -0.12606387 -0.48036143  0.22629768  0.23753358 -0.12182336  0.24418733
+   0.01571197 -0.41482142]]
+Diff with previous
+[[ 0.17065981 -0.05042723 -0.07100707  0.18401968 -0.02819365 -0.14698145
+   0.06610951  0.02294247 -0.0664541  -0.07720113  0.17636278 -0.10042065
+  -0.18834947  0.01633239  0.03345633  0.0288333  -0.16720837 -0.09432963
+   0.03457911 -0.10690601  0.00918317 -0.07557807 -0.18578924  0.00102897
+  -0.17174599  0.05533089 -0.10661735 -0.20664158  0.16308104  0.08098054
+   0.06293258 -0.13270445]
+ [-0.05015874  0.01783945  0.02349059 -0.06838216  0.00920558  0.04521278
+  -0.01947248 -0.00700045  0.02041505  0.02624791 -0.05164556  0.03236077
+   0.06461284 -0.00523613 -0.009976   -0.00878587  0.05193284  0.02824001
+  -0.01037729  0.03254572 -0.00284848  0.02307592  0.05481376 -0.00031528
+   0.05210733 -0.01747409  0.03244227  0.06718355 -0.05229515 -0.02360165
+  -0.02029653  0.04531866]]
+Diff with expected :
+[[ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  7.4505806e-09  0.0000000e+00  0.0000000e+00
+  -3.7252903e-09  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  4.6566129e-10
+   0.0000000e+00  0.0000000e+00  1.8626451e-09  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00 -3.7252903e-09  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00]
+ [ 0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  3.7252903e-09  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  4.6566129e-10  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00
+   0.0000000e+00  0.0000000e+00  0.0000000e+00  0.0000000e+00]]
+
+```
+We can see that we don't have a big difference between the result and the expected one.

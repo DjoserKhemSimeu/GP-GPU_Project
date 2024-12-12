@@ -481,9 +481,23 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         new_W2=drv.mem_alloc(K1*K2*float_size)
         new_b1=drv.mem_alloc(K1*float_size)
         new_b2=drv.mem_alloc(K2*float_size)
+
+        
         update_weights(W1, dW1_gpu, new_W1, np.float32(epsilon), np.int32(K1), np.int32(M),
                         block=(TILE_DIM, 1, 1), 
                         grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+
+        new_W1_h=np.zeros_like(model["W1_np"])
+        drv.memcpy_dtoh(new_W1_h,new_W1)
+        print("Result update_weights :")
+        print(new_W1_h)
+        print("Diff with previous")
+        print(new_W1_h-model["W1_np"])
+        new_W1_cpu=model["W1_np"]-epsilon*dW1_cpu
+        print("Diff with expected :")
+        print(new_W1_cpu-new_W1_h)
+
+
         update_bias(b1, db1_gpu, new_b1, np.float32(epsilon), np.int32(K1), 
                     block=(TILE_DIM, 1, 1),
                     grid=((K1 + TILE_DIM - 1) // TILE_DIM, 1))
@@ -493,16 +507,8 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         update_bias(b2, db2_gpu, new_b2, np.float32(epsilon), np.int32(K2), 
                     block=(TILE_DIM, 1, 1), 
                     grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
-        new_W1_h=np.zeros_like(model["W1_np"])
-        drv.memcpy_dtoh(new_W1_h,new_W1)
-        # print("Result update_weights :")
-        # print(new_W1_h)
-        # print("Diff with previous")
-        # print(new_W1_h-model["W1_np"])
-        # new_W1_cpu=model["W1_np"]-epsilon*dW1_cpu
-        # print("Diff with expected :")
-        # print(new_W1_cpu-new_W1_h)
-        # Updating weights and biases
+        
+        #Updating weights and biases
 
         W1 = new_W1
         W2= new_W2
@@ -609,7 +615,7 @@ d_hidden = 32 #TODO
 epsilon = 0.01 #TODO
 
 model = init_model(d_input,d_hidden,d_output)
-model = train_model(model,d_hidden, num_epochs=1000, print_loss=True)
+model = train_model(model,d_hidden, num_epochs=1, print_loss=True)
 
 print("The final accuracy obtained is :", accuracy(y, predict(model, X)))
 #### display function
