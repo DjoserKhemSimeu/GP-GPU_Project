@@ -9,7 +9,9 @@ import pycuda.autoinit
 import time
 import pycuda.driver as drv
 from pycuda.compiler import SourceModule
+import matplotlib.pyplot as plt 
 import sys
+drv.init()
 
 mod = SourceModule(open("kernel.cu").read(), options=['-std=c++11'])
 
@@ -130,7 +132,7 @@ def forward_layer(X_gpu, W_gpu, b_gpu, M, N, K):
     block_size = (TILE_DIM, TILE_DIM, 1)
     grid_size = ((K + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM)
 
-    # print("Debugging info:")
+    #print("Debugging info:")
     # print("Dimensions:")
     #print(f"M (rows in X): {M}, N (columns in X, rows in W): {N}, K (columns in W): {K}")
     # print("Block size:", block_size)
@@ -140,34 +142,52 @@ def forward_layer(X_gpu, W_gpu, b_gpu, M, N, K):
     matrix_multiplication(X_gpu, W_gpu, C_gpu, np.int32(M), np.int32(N), np.int32(K), block=block_size, grid=grid_size)
 
     # Allouer de la mémoire pour le résultat de la multiplication (sur l'hôte)
-    # C = np.zeros((M, K), dtype=np.float32)
+    C = np.zeros((M, K), dtype=np.float32)
     
     
 
     # Copier le résultat de C depuis le GPU vers l'hôte
-    # drv.memcpy_dtoh(C, C_gpu)
-    # print("Résultat de la multiplication des matrices (C):")
-    # print(C)  # Afficher le résultat de la multiplication des matrices
+    drv.memcpy_dtoh(C, C_gpu)
+    #print("Résultat de la multiplication des matrices (C):")
+    #print(C)  # Afficher le résultat de la multiplication des matrices
 
-    # print("Résultat attendu (NumPy):")
-    # X_temp = np.array(X_temp, dtype=np.float32)  # Si X est nécessaire sur l'hôte
-    # W_temp = np.array(W1_temp, dtype=np.float32)
-    # expected_C = np.dot(X,model["W1_np"])
-    # print(expected_C)
+    #print("Résultat attendu (NumPy):")
+    #X_temp = np.array(X_temp, dtype=np.float32)  # Si X est nécessaire sur l'hôte
+    #W_temp = np.array(W1_temp, dtype=np.float32)
+    expected_C = np.dot(X,model["W1_np"])
+    #print(expected_C)
 
     # Lancer le kernel d'ajout de biais
     add_bias(C_gpu, b_gpu, C_gpu, np.int32(M), np.int32(K), block=block_size, grid=grid_size)
 
     # Copier les résultats du biais depuis le GPU vers l'hôte
-    # C_biased = np.zeros((M, K), dtype=np.float32)
-    # drv.memcpy_dtoh(C_biased, C_gpu)
-    # print("Résultat après ajout du biais (C + b):")
-    # print(C_biased)  # Afficher le résultat de la multiplication + biais
+    C_biased = np.zeros((M, K), dtype=np.float32)
+    drv.memcpy_dtoh(C_biased, C_gpu)
+    #print("Résultat après ajout du biais (C + b):")
+    #print(C_biased)  # Afficher le résultat de la multiplication + biais
+    #print("Resultat attendue (Numpy) :")
+    #print(C+model["b1_np"])
 
     # Retourner la mémoire du GPU pour C (qui est maintenant C_gpu)
     return C_gpu
 
 
+def sigmoid(x):
+    """
+    Fonction sigmoïde.
+    :param x: Entrée (peut être un scalaire, un vecteur ou une matrice)
+    :return: La valeur de la sigmoïde appliquée à x
+    """
+    return 1 / (1 + np.exp(-x))
+
+def sigmoid_derivative(x):
+    """
+    Fonction dérivée de la sigmoïde.
+    :param x: Entrée (peut être un scalaire, un vecteur ou une matrice)
+    :return: La dérivée de la sigmoïde appliquée à x
+    """
+    s = sigmoid(x)
+    return s * (1 - s)
 def forward_function(model, X):
     # Initialiser les dimensions
     M, N = X.shape
@@ -181,32 +201,50 @@ def forward_function(model, X):
     drv.memcpy_htod(X_gpu, X)
 
     # Première couche
-    z1 = forward_layer(X_gpu, model['W1'], model['b1'], M, N, K1)
-    a1_gpu = drv.mem_alloc(z1.nbytes)
-    
+    z1 = forward_layer(X_gpu, W1, b1, M, N, K1)
+    a1_gpu = drv.mem_alloc(M*K1*float_size)
+    z1_h=np.zeros((M,K1),dtype=np.float32)
+    drv.memcpy_dtoh(z1_h,z1)
+    #print ("Z :")
+    #print(z1_h)
+    drv.Context.synchronize()
     sigmoid_activation(z1, a1_gpu, np.int32(M), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-    
+    a1_h=np.zeros((M,K1),dtype=np.float32)
+    drv.memcpy_dtoh(a1_h,a1_gpu)
+    #print("sigmoid result :")
+    #print(a1_h)
+    #print("sigmoid wanted :")
+    #print(1/(1+np.exp(-1*z1_h))) 
+    drv.Context.synchronize()
+    z2 = forward_layer(a1_gpu, W2, b2, M, K1, K2)
+    z2_h=np.zeros((M,K2),dtype=np.float32)
+    drv.memcpy_dtoh(z2_h,z2)
+    #print("Z :")
+    #print(z2_h)
+    #exp_scores_gpu = drv.mem_alloc(M*K2*float_size)
+    #exp_scores(z2, exp_scores_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+    #exp_h=np.zeros((M,K2),dtype=np.float32)
+    #drv.memcpy_dtoh(exp_h,exp_scores_gpu)
+    #print(exp_h)
+    #print("z2 values before softmax:", z2_h)
+    probs_gpu = drv.mem_alloc(M*K2*float_size)
+    drv.Context.synchronize()
+    softmax(z2, probs_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+    ## Necessary to compute the loss on cpu
+    probs = np.zeros((M,K2),dtype=np.float32)
+        
+    drv.memcpy_dtoh(probs, probs_gpu) 
+    # print("softmax result :")
     
 
-    # Deuxième couche
-    z2 = forward_layer(a1_gpu, model['W2'], model['b2'], M, K1, K2)
-    exp_scores_gpu = drv.mem_alloc(z2.nbytes)
-    
-    exp_scores(z2, exp_scores_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-    probs_gpu = drv.mem_alloc(z2.nbytes)
-    softmax(exp_scores_gpu, probs_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-    #probs = np.zeros_like(z2)
-    #drv.memcpy_dtoh(probs, probs_gpu)
-    
-
-    # Libérer la mémoire sur le GPU
-    
-
-    return probs_gpu
+    return np.argmax(probs,axis=1)
 
 
 ################# TRAINING FUNCTION ###################
-
+def softmax_cpu(x):
+    """Compute softmax values for each sets of scores in x."""
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum(axis=0) # only difference
 def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
 
     W1 = model['W1']
@@ -215,26 +253,33 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
     b2 = model['b2']
     float_size=sys.getsizeof(float)
 
-    X_gpu = drv.mem_alloc(X.nbytes)
-
-    # Copie vers le GPU
-    drv.memcpy_htod(X_gpu, X)
+    
 
     # Allocation d'une matrice temporaire pour copier depuis le GPU
     
-    y_gpu = drv.mem_alloc(y.nbytes)
-
-    # Copie vers le GPU
-    drv.memcpy_htod(y_gpu, y)
+    
 
     # Validation des octets
     
     # Gradient descent. For each batch...
     for i in range(0, num_epochs):
+        X_gpu = drv.mem_alloc(X.nbytes)
+
+        # Copie vers le GPU
+        drv.memcpy_htod(X_gpu, X)
+        y_gpu = drv.mem_alloc(y.nbytes)
+
+        # Copie vers le GPU
+        drv.memcpy_htod(y_gpu, y)
+        drv.Context.synchronize()
         M, N = X.shape
         K1 = model['W1_shape'][1]
         K2 = model['W2_shape'][1]
-        #print (X)
+        # print("M =",M)
+        # print("N =",N)
+        # print("K1 =", K1)
+        # print("K2 =", K2)
+        #print(X)
         
         # W1_temp = np.zeros((N, K1), dtype=np.float32)
        
@@ -253,16 +298,23 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         # Forward propagation (copy/paste inside forward_function previously defined)
         z1 = forward_layer(X_gpu, W1, b1, M, N, K1)
         a1_gpu = drv.mem_alloc(M*K1*float_size)
-        # z1_h=np.zeros((M,K1),dtype=np.float32)
-        # drv.memcpy_dtoh(z1_h,z1)
+        z1_h=np.zeros((M,K1),dtype=np.float32)
+        drv.memcpy_dtoh(z1_h,z1)
+        #print ("Z :")
         #print(z1_h)
+        drv.Context.synchronize()
         sigmoid_activation(z1, a1_gpu, np.int32(M), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-        # a1_h=np.zeros((M,K1),dtype=np.float32)
-        # drv.memcpy_dtoh(a1_h,a1_gpu)
+        a1_h=np.zeros((M,K1),dtype=np.float32)
+        drv.memcpy_dtoh(a1_h,a1_gpu)
+        #print("sigmoid result :")
         #print(a1_h)
+        #print("sigmoid wanted :")
+        #print(1/(1+np.exp(-1*z1_h))) 
+        drv.Context.synchronize()
         z2 = forward_layer(a1_gpu, W2, b2, M, K1, K2)
-        # z2_h=np.zeros((M,K2),dtype=np.float32)
-        # drv.memcpy_dtoh(z2_h,z2)
+        z2_h=np.zeros((M,K2),dtype=np.float32)
+        drv.memcpy_dtoh(z2_h,z2)
+        #print("Z :")
         #print(z2_h)
         #exp_scores_gpu = drv.mem_alloc(M*K2*float_size)
         #exp_scores(z2, exp_scores_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
@@ -271,13 +323,19 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         #print(exp_h)
         #print("z2 values before softmax:", z2_h)
         probs_gpu = drv.mem_alloc(M*K2*float_size)
+        drv.Context.synchronize()
         softmax(z2, probs_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
         ## Necessary to compute the loss on cpu
         probs = np.zeros((M,K2),dtype=np.float32)
          
-        drv.memcpy_dtoh(probs, probs_gpu)      
+        drv.memcpy_dtoh(probs, probs_gpu) 
+        # print("softmax result :")
+        # print(probs) 
+        # print("softmax wanted : ")
+        # print(softmax_cpu(z2_h))    
         
         #print (probs[np.arange(probs.shape[0]), y])
+        
         correct_logprobs = np.log(probs[np.arange(probs.shape[0]), y])# Calculation of cross entropy for each example
         
         data_loss = -1./N * np.sum(correct_logprobs,axis=0,keepdims=True) # Loss totale
@@ -288,57 +346,168 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         #TODO
         #Computing delta2 as the difference between the output of the model and the ground truth
        # delta2 calculation
+        # print("Probs :",probs.nbytes)
+        # print("Y :", )
+        grid_size = (probs.shape[0] + TILE_DIM - 1) // TILE_DIM
         delta2_gpu = drv.mem_alloc(probs.nbytes)
+        drv.Context.synchronize()
         compute_delta2(probs_gpu, y_gpu, delta2_gpu, np.int32(probs.shape[1]), np.int32(probs.shape[0]),
-                    block=(TILE_DIM, 1, 1),
-                    grid=((probs.shape[0] + TILE_DIM - 1) // TILE_DIM, 1))
-
+                    block=(probs.shape[0], 1, 1),
+                    grid=(1,1))
+        # delta2_cpu=probs.copy()
+        # delta2_cpu[np.arange(probs.shape[0]), y_temp] -= 1
+        delta2_h = np.zeros((M,K2),dtype=np.float32)
+        drv.memcpy_dtoh(delta2_h, delta2_gpu) 
+        # y_cpu=np.zeros(probs.shape[0],dtype=np.int32)
+        # drv.memcpy_dtoh(y_cpu, y_gpu) 
+        #print(" delta 2 results : ")
+        #print(delta2_h)
+        # print("delta2 wanted : ")
+        # print(delta2_cpu)
+        # print("differences :")
+        # print(delta2_cpu-delta2_h)
+        # print("diif of y :")
+        # print(y_cpu-y)
         # Transpose a1
+        grid_y = (K1 + TILE_DIM - 1) // TILE_DIM
+        grid_x = (M + TILE_DIM - 1) // TILE_DIM
         a1_gpu_T = drv.mem_alloc(M * K1 * float_size)
         transpose(a1_gpu, a1_gpu_T, np.int32(M), np.int32(K1),
                 block=(TILE_DIM, TILE_DIM, 1),
-                grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-
-        # Gradient dW2
+                grid=(grid_x,grid_y))
+        # a1_h_T=np.zeros((K1,M),dtype=np.float32)
+        # drv.memcpy_dtoh(a1_h_T,a1_gpu_T)
+        # print("CPU :")
+        # print(a1_h.T)
+        # print("GPU : ")
+        # print(a1_h_T)
+        # # Gradient dW2
         dW2_gpu = drv.mem_alloc(K1 * K2 * float_size)
+        
         matrix_multiplication(a1_gpu_T, delta2_gpu, dW2_gpu, np.int32(K1), np.int32(M), np.int32(K2),
                             block=(TILE_DIM, TILE_DIM, 1),
                             grid=((K2 + TILE_DIM - 1) // TILE_DIM, (K1 + TILE_DIM - 1) // TILE_DIM))
+        # dW2_h=np.zeros((K1,K2),dtype=np.float32)
+        # drv.memcpy_dtoh(dW2_h, dW2_gpu) 
+        # dW2_cpu=np.dot(a1_h.T,delta2_h)
 
+        # print("Diff DW2 :")
+        # print(dW2_h-dW2_cpu)
+        # print("GPU : ")
+        # print(dW2_h)
+        # print("CPU : ")
+        # print(dW2_cpu)
         # Compute db2
         db2_gpu = drv.mem_alloc(K2 * float_size)
         compute_db(delta2_gpu, db2_gpu, np.int32(K2), np.int32(M),
-                block=(TILE_DIM, 1, 1),
-                grid=((K2 + TILE_DIM - 1) // TILE_DIM, 1))
-
+                block=(K2, 1, 1),
+                grid=(1, 1))
+        # db2_h=np.zeros(K2,dtype=np.float32)
+        # drv.memcpy_dtoh(db2_h,db2_gpu)
+        # print(delta2_h)
+        # print("GPU :")
+        # print(db2_h)
+        # print("CPU :")
+        # print(np.sum(delta2_h, axis=0, keepdims=True) )
+        # print("Diff :")
+        # print(db2_h-np.sum(delta2_h, axis=0, keepdims=True))
         # delta1 calculation
-        delta1_gpu = drv.mem_alloc(N * K1 * float_size)
+        
         W2_T = drv.mem_alloc(K1 * K2 * float_size)
+        grid_y = (K2 + TILE_DIM - 1) // TILE_DIM
+        grid_x = (K1 + TILE_DIM - 1) // TILE_DIM
         transpose(W2, W2_T, np.int32(K1), np.int32(K2),
                 block=(TILE_DIM, TILE_DIM, 1),
-                grid=((K2 + TILE_DIM - 1) // TILE_DIM, (K1 + TILE_DIM - 1) // TILE_DIM))
-        compute_delta1(delta2_gpu, W2_T, delta1_gpu, np.int32(K2), np.int32(K1),
+                grid=(grid_x,grid_y))
+        # w2_trans=np.zeros((K2,K1),dtype=np.float32)
+        # drv.memcpy_dtoh(w2_trans,W2_T)
+        # print("Trans W2 :")
+        # print(w2_trans.shape)
+
+        # print("Wanted trans :")
+        # print(model["W2_np"].T)
+        delta_dot_gpu = drv.mem_alloc(M * K1 * float_size)
+        matrix_multiplication(delta2_gpu, W2_T, delta_dot_gpu, np.int32(M), np.int32(K2), np.int32(K1),
+                            block=(TILE_DIM, TILE_DIM, 1),
+                            grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+        prod=np.zeros((M,K1),dtype=np.float32)
+        drv.memcpy_dtoh(prod,delta_dot_gpu)
+      
+        # print("Prod :")
+        # print(prod)
+        # print("Wanted prod : ")
+        # print(np.dot(delta2_h,model["W2_np"].T))
+        # print(prod.shape)
+        # print(z1_h.shape)
+        delta1_gpu = drv.mem_alloc(M * K1 * float_size)
+        compute_delta1( delta_dot_gpu,z1, delta1_gpu, np.int32(M), np.int32(K1),
                     block=(TILE_DIM, TILE_DIM, 1),
-                    grid=((K1 + TILE_DIM - 1) // TILE_DIM, (K2 + TILE_DIM - 1) // TILE_DIM))
-                
+                    grid=((M + TILE_DIM - 1) // TILE_DIM, (K1 + TILE_DIM - 1) // TILE_DIM))
+        delta1_h=np.zeros((M,K1),dtype=np.float32)   
+        drv.memcpy_dtoh(delta1_h,delta1_gpu)
+        # print("GPU : ")
+        # print(delta1_h)
+        # print("CPU :")
+        # print((sigmoid_derivative(z1_h)*np.dot(delta2_h,model["W2_np"].T)).shape)
+        # print("Diff : ")
+        # print(delta1_h-sigmoid_derivative(z1_h)*np.dot(delta2_h,model["W2_np"].T))
         dW1_gpu = drv.mem_alloc(N*K1*float_size)
+        
         db1_gpu = drv.mem_alloc(K1*float_size)
         X_gpu_T=drv.mem_alloc(X.nbytes)
-        transpose(X_gpu,X_gpu_T,np.int32(M),np.int32(N),block=(TILE_DIM, TILE_DIM, 1), grid=((N + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
-        matrix_multiplication(X_gpu_T, delta1_gpu, dW1_gpu, np.int32(X.shape[0]), np.int32(X.shape[1]), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, (X.shape[0] + TILE_DIM - 1) // TILE_DIM))
-        compute_db(delta1_gpu, db1_gpu, np.int32(K1), np.int32(M), block=(TILE_DIM, TILE_DIM, 1), grid=((M + TILE_DIM - 1) // TILE_DIM, 1))  # Gradient of the biais of the hidden layer
-        
+        grid_y = (N + TILE_DIM - 1) // TILE_DIM
+        grid_x = (M + TILE_DIM - 1) // TILE_DIM
+        transpose(X_gpu,X_gpu_T,np.int32(M),np.int32(N),block=(TILE_DIM, TILE_DIM, 1), grid=(grid_x,grid_y))
+        X_T_h=np.zeros((N,M),dtype=np.float32)
+        drv.memcpy_dtoh(X_T_h,X_gpu_T)
+        # print("Trans :")
+        # print(X_T_h)
+        # print("Trans wanted :")
+        # print(X.T)
+        matrix_multiplication(X_gpu_T, delta1_gpu, dW1_gpu, np.int32(N), np.int32(M), np.int32(K1),
+                                 block=(TILE_DIM, TILE_DIM, 1),
+                                  grid=((K1 + TILE_DIM - 1) // TILE_DIM, (N + TILE_DIM - 1) // TILE_DIM))
+        compute_db(delta1_gpu, db1_gpu, np.int32(K1), np.int32(M),
+                    block=(K1, 1, 1), 
+                    grid=(1, 1))  # Gradient of the biais of the hidden layer
+        dW1_cpu=np.zeros_like(model["W1_np"])
+        drv.memcpy_dtoh(dW1_cpu,dW1_gpu)
+        dW1_h=np.dot(X.T,delta1_h)
+        # print("Diff entre dw1:")
+        # print(dW1_cpu-dW1_h)
         
         # Gradient descente
-        update_weights(W1, dW1_gpu, W1, np.float32(epsilon), np.int32(K1), np.int32(M), block=(TILE_DIM, TILE_DIM, 1), grid=((M + TILE_DIM - 1) // TILE_DIM, (K1 + TILE_DIM - 1) // TILE_DIM))
-        update_bias(b1, db1_gpu, b1, np.float32(epsilon), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, 1))
-        update_weights(W2, dW2_gpu, W2, np.float32(epsilon), np.int32(K2), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, (K2 + TILE_DIM - 1) // TILE_DIM))
-        update_bias(b2, db2_gpu, b2, np.float32(epsilon), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, 1))
+        new_W1=drv.mem_alloc(N*K1*float_size)
+        new_W2=drv.mem_alloc(K1*K2*float_size)
+        new_b1=drv.mem_alloc(K1*float_size)
+        new_b2=drv.mem_alloc(K2*float_size)
+        update_weights(W1, dW1_gpu, new_W1, np.float32(epsilon), np.int32(K1), np.int32(M),
+                        block=(TILE_DIM, 1, 1), 
+                        grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+        update_bias(b1, db1_gpu, new_b1, np.float32(epsilon), np.int32(K1), 
+                    block=(TILE_DIM, 1, 1),
+                    grid=((K1 + TILE_DIM - 1) // TILE_DIM, 1))
+        update_weights(W2, dW2_gpu, new_W2, np.float32(epsilon), np.int32(K2), np.int32(K1), 
+                        block=(TILE_DIM, 1, 1), 
+                        grid=((K1 + TILE_DIM - 1) // TILE_DIM,1))
+        update_bias(b2, db2_gpu, new_b2, np.float32(epsilon), np.int32(K2), 
+                    block=(TILE_DIM, 1, 1), 
+                    grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+        new_W1_h=np.zeros_like(model["W1_np"])
+        drv.memcpy_dtoh(new_W1_h,new_W1)
+        # print("Result update_weights :")
+        # print(new_W1_h)
+        # print("Diff with previous")
+        # print(new_W1_h-model["W1_np"])
+        # new_W1_cpu=model["W1_np"]-epsilon*dW1_cpu
+        # print("Diff with expected :")
+        # print(new_W1_cpu-new_W1_h)
         # Updating weights and biases
-        model["W1"] = W1
-        model["W2"]= W2
-        model["b1"]=b1        
-        model["b2"]=b2 
+
+        W1 = new_W1
+        W2= new_W2
+        b1=new_b1        
+        b2=new_b2 
         a1_gpu.free()
         z1.free()
         z2.free()
@@ -351,30 +520,77 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         db1_gpu.free()
         a1_gpu_T.free()
         X_gpu_T.free()
+        X_gpu.free()
+        y_gpu.free()
         W2_T.free()
         # Loss display
         if print_loss and i % 1 == 0:
           print("Loss at epoch %i: %f" %(i, data_loss))
-    X_gpu.free()
-    y_gpu.free()
+    
 
     return model
 ######################## PREDICTION FUNCTION ###############
 def predict(model, x):
-    W1, b1, W2, b2 = model['W1'], model['b1'], model['W2'], model['b2']
-    # Forward propagation, like before
-    z1 = forward_layer(x,W1,b1) 
-    a1 = [[sigmoid(z) for z in z_row] for z_row in z1]
-    z2 = forward_layer(a1,W2,b2) 
-    exp_scores =[[np.exp(z) for z in z_row] for z_row in z2]
-    probs = [[exp/sum(exp_row) for exp in exp_row] for exp_row in exp_scores]
-    return np.argmax(probs, axis=1)
+    M, N = x.shape
+    float_size=sys.getsizeof(float)
+    K1 = model['W1_shape'][1]
+    K2 = model['W2_shape'][1]
+    W1 = model['W1']
+    b1 = model['b1']
+    W2 = model['W2']
+    b2 = model['b2']
+    # Allouer de la mémoire sur le GPU
+    X_gpu = drv.mem_alloc(x.nbytes)
+
+    # Copier les données sur le GPU
+    drv.memcpy_htod(X_gpu, x)
+
+    # Première couche
+    z1 = forward_layer(X_gpu, W1, b1, M, N, K1)
+    a1_gpu = drv.mem_alloc(M*K1*float_size)
+    z1_h=np.zeros((M,K1),dtype=np.float32)
+    drv.memcpy_dtoh(z1_h,z1)
+    #print ("Z :")
+    #print(z1_h)
+    drv.Context.synchronize()
+    sigmoid_activation(z1, a1_gpu, np.int32(M), np.int32(K1), block=(TILE_DIM, TILE_DIM, 1), grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+    a1_h=np.zeros((M,K1),dtype=np.float32)
+    drv.memcpy_dtoh(a1_h,a1_gpu)
+    #print("sigmoid result :")
+    #print(a1_h)
+    #print("sigmoid wanted :")
+    #print(1/(1+np.exp(-1*z1_h))) 
+    drv.Context.synchronize()
+    z2 = forward_layer(a1_gpu, W2, b2, M, K1, K2)
+    z2_h=np.zeros((M,K2),dtype=np.float32)
+    drv.memcpy_dtoh(z2_h,z2)
+    #print("Z :")
+    #print(z2_h)
+    #exp_scores_gpu = drv.mem_alloc(M*K2*float_size)
+    #exp_scores(z2, exp_scores_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+    #exp_h=np.zeros((M,K2),dtype=np.float32)
+    #drv.memcpy_dtoh(exp_h,exp_scores_gpu)
+    #print(exp_h)
+    #print("z2 values before softmax:", z2_h)
+    probs_gpu = drv.mem_alloc(M*K2*float_size)
+    drv.Context.synchronize()
+    softmax(z2, probs_gpu, np.int32(M), np.int32(K2), block=(TILE_DIM, TILE_DIM, 1), grid=((K2 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+    ## Necessary to compute the loss on cpu
+    probs = np.zeros((M,K2),dtype=np.float32)
+        
+    drv.memcpy_dtoh(probs, probs_gpu) 
+    # print("softmax result :")
+    
+
+    return np.argmax(probs,axis=1)
 
 ########################## TEST ########################## number of examples in the training set
 
 np.random.seed(1)
-X, y = sklearn.datasets.make_moons(300, noise=0.20)
+X, y = sklearn.datasets.make_moons(300, noise=0.2)
 X = np.ascontiguousarray(X, dtype=np.float32)
+#y_temp=y.copy()
+y= np.ascontiguousarray(y, dtype=np.int32)
 #y = np.ascontiguousarray(y, dtype=np.float32)
 N =  len(X) #TODO size of the dataset
 
@@ -396,3 +612,23 @@ model = init_model(d_input,d_hidden,d_output)
 model = train_model(model,d_hidden, num_epochs=1000, print_loss=True)
 
 print("The final accuracy obtained is :", accuracy(y, predict(model, X)))
+#### display function
+def plot_decision_boundary(pred_func):
+    """
+    Shows the decision boundaries of a binary prediction function.
+    """
+    # Set grid dimensions and give some margin for display
+    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
+    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
+    h = 0.01
+    # Generate the grid of points with a distance of h between them
+    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+    # Drawing the decision boundary
+    Z = pred_func(np.c_[xx.ravel(), yy.ravel()])
+    Z = Z.reshape(xx.shape)
+    # Show contour and training points
+    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
+    plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Spectral)
+plot_decision_boundary(lambda v: predict(model,v))
+plt.title("Decision Boundary for hidden layer size 3")
+plt.show()

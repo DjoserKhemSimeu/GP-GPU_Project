@@ -123,3 +123,7 @@ And also I must think about which functions would be computed on gpu or cpu :
 + gradient descent : gpu
 + forward function : gpu
 + accuracy computation :cpu
+* NOTEBOOK
+# Thursday 12 december
+The goal is to modify the trainning function to stabilyze the learning. Actually the $plot_decision_boundary$ plot a quasi-random decision frontie after 1000 epochs:
+![decision_boundary](images/Figure_1.png)

@@ -104,20 +104,12 @@ extern "C" __global__ void add_bias(float *A, float *B, float *C, int M, int N) 
     }
 }
 extern "C" __global__ void transpose(float *in, float *out, unsigned int nx, unsigned int ny) {
-    __shared__ float tile[32][32];
+    
     unsigned int ix = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
     if (ix < nx && iy < ny) {
-        tile[threadIdx.y][threadIdx.x] = in[iy * nx + ix];
-    }
-
-    __syncthreads();
-
-    
-
-    if (ix < nx && iy < ny) {
-        out[ix * ny + iy] = tile[threadIdx.x][threadIdx.y];
+        out[iy*nx+ix]=in[ix*ny+iy];
     }
 }
 extern "C" __global__ void cross_entropy(float *probs, int *y, float *out, unsigned int n, unsigned int num_classes) {
@@ -190,48 +182,34 @@ extern "C" __global__ void compute_delta2(float *probs, int *y_true, float *out,
         for (unsigned int j = 0; j < num_classes; ++j) {
             out[ix * num_classes + j] = probs[ix * num_classes + j];
         }
+        
         out[ix * num_classes + y_true[ix]] -= 1.0f;
     }
 }
 extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row) {
-    __shared__ float cache[1024];  // Cache partagé pour la réduction
-    unsigned int ix = threadIdx.x;
-    unsigned int row = blockIdx.x;
+    unsigned int col = threadIdx.x;
 
-    if (row < n_row) {
-        float sum = 0.0f;
-        for (unsigned int j = ix; j < n_col; j += blockDim.x) {
-            sum += delta[row * n_col + j];
+    if (col < n_col) {
+        float acc = 0.0f;
+        for (unsigned int i = 0; i < n_row; ++i) {
+            acc += delta[i * n_col + col];
         }
-        cache[ix] = sum;
+        // Stockez la somme calculée dans out
+        out[col] = acc;
 
-        __syncthreads();
-
-        // Réduction parallèle
-        for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-            if (ix < s) {
-                cache[ix] += cache[ix + s];
-            }
-            __syncthreads();
-        }
-
-        if (ix == 0) {
-            out[row] = cache[0];
-        }
     }
 }
 __device__ float sigmoid_derivative(float x) {
     float sigmoid = 1.0f / (1.0f + exp(-x));
     return sigmoid * (1.0f - sigmoid);
 }
-extern "C" __global__ void compute_delta1(float *delta1, float *z1, float *out, unsigned int n_col, unsigned int n_row) {
+extern "C" __global__ void compute_delta1(float *delta2, float *z1, float *out, unsigned int n_col, unsigned int n_row) {
     unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned int row = ix / n_col;
-    unsigned int col = ix % n_col;
+    unsigned int iy = blockDim.y * blockIdx.y + threadIdx.y;
 
-    if (row < n_row && col < n_col) {
-        float z = z1[row * n_col + col];
-        out[row * n_col + col] = sigmoid_derivative(z) * delta1[row * n_col + col];
+    if (iy < n_row && ix < n_col) {
+        float z = z1[iy * n_col + ix];
+        out[iy * n_col + ix] = sigmoid_derivative(z) * delta2[iy * n_col + ix];
     }
 }
 extern "C" __global__ void update_weights (float * W, float* dW, float * out,float epsilon ,unsigned int n_col,unsigned int n_row){
