@@ -186,7 +186,7 @@ extern "C" __global__ void compute_delta2(float *probs, int *y_true, float *out,
         out[ix * num_classes + y_true[ix]] -= 1.0f;
     }
 }
-extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row) {
+extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row,float * b, float epsilon) {
     unsigned int col = threadIdx.x;
 
     if (col < n_col) {
@@ -195,8 +195,52 @@ extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_c
             acc += delta[i * n_col + col];
         }
         // Stockez la somme calculée dans out
-        out[col] = acc;
+        out[col] =b[col]-epsilon*acc;
 
+    }
+}
+extern "C" __global__ void compute_dW(float* A, float* B, float* C, int ARows, int ACols, int BCols,float * W, float epsilon) {
+    // Calcul de l'indice de la ligne et de la colonne
+    int Row = blockIdx.y * TILE_DIM + threadIdx.y;
+    int Col = blockIdx.x * TILE_DIM + threadIdx.x;
+    
+    // Déclaration de la variable qui va stocker la valeur du produit scalaire
+    float CValue = 0.0;
+
+    // Partage des blocs pour les matrices A et B
+    __shared__ float As[TILE_DIM][TILE_DIM];
+    __shared__ float Bs[TILE_DIM][TILE_DIM];
+
+    // Boucle sur les "tiles" (blocs de sous-matrices)
+    for (int k = 0; k < (ACols + TILE_DIM - 1) / TILE_DIM; ++k) {
+        // Charger les sous-matrices A et B dans les mémoires partagées
+        if (Row < ARows && (k * TILE_DIM + threadIdx.x) < ACols) {
+            As[threadIdx.y][threadIdx.x] = A[Row * ACols + k * TILE_DIM + threadIdx.x];
+        } else {
+            As[threadIdx.y][threadIdx.x] = 0.0;
+        }
+        
+        if (Col < BCols && (k * TILE_DIM + threadIdx.y) < ACols) {
+            Bs[threadIdx.y][threadIdx.x] = B[(k * TILE_DIM + threadIdx.y) * BCols + Col];
+        } else {
+            Bs[threadIdx.y][threadIdx.x] = 0.0;
+        }
+
+        // Synchroniser les threads avant de commencer les calculs
+        __syncthreads();
+
+        // Calcul du produit scalaire pour cette "tile"
+        for (int n = 0; n < TILE_DIM; ++n) {
+            CValue += As[threadIdx.y][n] * Bs[n][threadIdx.x];
+        }
+
+        // Synchroniser les threads après le calcul
+        __syncthreads();
+    }
+
+    // Écrire la valeur calculée dans la matrice C si elle est dans les limites
+    if (Row < ARows && Col < BCols) {
+        C[Row * BCols + Col] = W[Row * BCols + Col]-epsilon*CValue;
     }
 }
 __device__ float sigmoid_derivative(float x) {

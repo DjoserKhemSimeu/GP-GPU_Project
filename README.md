@@ -203,3 +203,7 @@ Diff with expected :
 
 ```
 We can see that we don't have a big difference between the result and the expected one.
+# Wednesday 8 january
+## Perfoormance comparison between Numpy VS Cuda implementation
+![Nash_results](images/Nash_comparison_plot.png)
+As we can see on the graph, by comparing 

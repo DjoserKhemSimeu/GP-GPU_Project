@@ -115,7 +115,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
     b2 = model['b2']
     history_val=[]
     history_train=[]
-    
+
     # Gradient descent. For each batch...
     start_loop=time.time()
     for i in range(0, num_epochs):
@@ -126,15 +126,15 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
 
         ##Training
         # Forward propagation (copy/paste inside forward_function previously defined)
-        start_fw=time.time()
+        # start_fw=time.time()
         z1 = forward_layer(X, W1, b1)  # Output of the first layer
         a1 = sigmoid(z1) # Sigmoid activation of the first layer
         z2 =  forward_layer(a1, W2, b2)  # Output of the second layer
         exp_scores = np.exp(z2)# Compute exp(z2)
         probs = exp_scores/np.sum(exp_scores,axis=1,keepdims=True) #Compute the softmax function for the output layer
-        end_fw=time.time()
-        if i==0:
-            print("Time to compute the forward pass =", end_fw-start_fw)
+        # end_fw=time.time()
+        # if i==0:
+        #     print("Time to compute the forward pass =", end_fw-start_fw)
         
         correct_logprobs = np.log(probs[np.arange(probs.shape[0]), y])# Calculation of cross entropy for each example
         
@@ -145,7 +145,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         
         
         # Backpropagation
-        start_grad=time.time()
+        # start_grad=time.time()
         delta2 = probs.copy()
         delta2[np.arange(probs.shape[0]), y] -= 1
         dW2 = matrix_multiplication(transpose(a1), delta2) 
@@ -154,9 +154,9 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         delta1 =sigmoid_derivative(z1) * matrix_multiplication(delta2, transpose(W2))  
         dW1 = matrix_multiplication(transpose(X), delta1) 
         db1 = np.sum(delta1, axis=0, keepdims=True)
-        end_grad=time.time()
-        if i==0:
-           print("Time to compute the gradients =", end_grad-start_grad)
+        # end_grad=time.time()
+        # if i==0:
+        #     print("Time to compute the gradients =", end_grad-start_grad)
         
         
         # Gradient descente
@@ -172,142 +172,39 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         model = { 'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2}
         end_e=time.time()
         elapsed_time=end_e-start_e
-        
         if i==0:
-            print("elapsed time for 1 epoch:", elapsed_time)
             with open('../data/epoch_timeslvl0.txt', 'a') as file:
-                file.write(f"{nn_hdim} {elapsed_time}\n")
+                file.write(f"{K1} {elapsed_time}\n")
         # Loss display
         if print_loss and i % 50 == 0:
 
           print("Loss at epoch %i: %f" %(i, data_loss))
     end_loop=time.time()
-    loop_time=end_loop-start_loop
-    with open('../data/loop_timeslvl0.txt', 'a') as file:
-        file.write(f"{nn_hdim} {loop_time}\n")
+    print("Looping time : ", end_loop-start_loop)
     return model#,history_train,history_val
 
 
 ########################## TEST ########################## number of examples in the training set
 
-def plot_decision_boundary(pred_func):
-    """
-    Shows the decision boundaries of a binary prediction function.
-    """
-    # Set grid dimensions and give some margin for display
-    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
-    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
-    h = 0.01
-    # Generate the grid of points with a distance of h between them
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-    # Drawing the decision boundary
-    Z = pred_func(np.c_[xx.ravel(), yy.ravel()])
-    Z = Z.reshape(xx.shape)
-    # Show contour and training points
-    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
-    plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Spectral)
-def plot_perf():
-    # Lire les données des fichiers texte
-    with open('../data/loop_timeslvl0.txt', 'r') as file:
-        loop_lvl0 = file.readlines()
-    with open('../data/loop_timeslvl2.txt', 'r') as file:
-        loop_lvl2 = file.readlines()
-    with open('../data/epoch_timeslvl0.txt', 'r') as file:
-        epoch_lvl0 = file.readlines()
-    with open('../data/epoch_timeslvl2.txt', 'r') as file:
-        epoch_lvl2 = file.readlines()
-
-    # Initialiser les listes pour stocker les valeurs
-    loop_lvl0_x = []
-    loop_lvl0_y = []
-    loop_lvl2_x = []
-    loop_lvl2_y = []
-    epoch_lvl0_x = []
-    epoch_lvl0_y = []
-    epoch_lvl2_x = []
-    epoch_lvl2_y = []
-
-    # Extraire les valeurs pour les boucles niveau 0
-    for line in loop_lvl0:
-        parts = line.split()
-        if len(parts) == 2:
-            loop_lvl0_x.append(float(parts[0]))
-            loop_lvl0_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les boucles niveau 2
-    for line in loop_lvl2:
-        parts = line.split()
-        if len(parts) == 2:
-            loop_lvl2_x.append(float(parts[0]))
-            loop_lvl2_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les époques niveau 0
-    for line in epoch_lvl0:
-        parts = line.split()
-        if len(parts) == 2:
-            epoch_lvl0_x.append(float(parts[0]))
-            epoch_lvl0_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les époques niveau 2
-    for line in epoch_lvl2:
-        parts = line.split()
-        if len(parts) == 2:
-            epoch_lvl2_x.append(float(parts[0]))
-            epoch_lvl2_y.append(float(parts[1]))
-
-    # Créer une figure avec deux sous-graphiques
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-    print(loop_lvl0)
-    # Tracer les données des boucles
-    ax1.plot(loop_lvl0_x, loop_lvl0_y, marker='o', linestyle='-', color='b', label='Level 0')
-    ax1.plot(loop_lvl2_x, loop_lvl2_y, marker='s', linestyle='-', color='r', label='Level 2')
-    ax1.set_xlabel('X-axis')
-    ax1.set_ylabel('Y-axis')
-    ax1.set_title('Comparaison des boucles (Loop)')
-    ax1.legend()
-    ax1.grid(True)
-
-    # Tracer les données des époques
-    ax2.plot(epoch_lvl0_x, epoch_lvl0_y, marker='o', linestyle='-', color='b', label='Level 0')
-    ax2.plot(epoch_lvl2_x, epoch_lvl2_y, marker='s', linestyle='-', color='r', label='Level 2')
-    ax2.set_xlabel('X-axis')
-    ax2.set_ylabel('Y-axis')
-    ax2.set_title('Comparaison des époques (Epoch)')
-    ax2.legend()
-    ax2.grid(True)
-
-    # Ajuster les espaces entre les sous-graphiques
-    plt.tight_layout()
-
-    # Afficher les graphiques
-    plt.show()
-
-np.random.seed(1)
-X, y = sklearn.datasets.make_moons(600, noise=0.20)
-X_save = X
-y_save = y
-
-N=len(X)
-
-
-# dimension of the input
-d_input = 2 
-
-# dimension of the output
-d_output = 2 
-
-# dimension of the hidden layer i.e. number of neurons in the hidden layer
-#d_hidden = 32
+digits = sklearn.datasets.load_digits()
+n_samples = len(digits.images)
+data = digits.images.reshape((n_samples, -1))
 
 
 
-# learning rate for the gradient descente algorithm
-epsilon = 0.01 
-with open('../data/epoch_timeslvl0.txt', 'w') as file:
-        pass
-with open('../data/loop_timeslvl0.txt', 'w') as file:
-    pass
-for d_hidden in [2,4,8,16,32,64,128,256,512,1024]:
+X =  digits.images.reshape((n_samples, -1)) # We reshape the images into vector
+
+y = digits.target
+
+N = len(X) 
+d_input = 8*8 #TODO The image shape is 8x8 pixels
+d_output = 10 #TODO We the classes (numbers from 0 to 9)
+#d_hidden = 20 
+
+# Gradient descent parameter
+epsilon = 0.001 
+
+for d_hidden in [2,4,8,16,32,64]:
     model = init_model(d_input,d_hidden,d_output)
     start= time.time()
     model = train_model(model,d_hidden, num_epochs=3000, print_loss=False)
@@ -315,7 +212,3 @@ for d_hidden in [2,4,8,16,32,64,128,256,512,1024]:
     print(f"N_Hidden : {d_hidden}   Training time : {end-start}")
 
 print("The final accuracy obtained is :", accuracy(y, predict(model, X)))
-# plot_decision_boundary(lambda x: predict(model, x))
-# plt.title("Results by with numpy")
-# plt.show()
-plot_perf()

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import sys
 drv.init()
 
-mod = SourceModule(open("kernel.cu").read(), options=['-std=c++11'])
+mod = SourceModule(open("../pyCuda/kernel.cu").read(), options=['-std=c++11'])
 
 dot = mod.get_function("dot_product")
 reduce = mod.get_function("reduce")
@@ -255,7 +255,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
     float_size=sys.getsizeof(float)
 
     
-    
+
     # Allocation d'une matrice temporaire pour copier depuis le GPU
     
     
@@ -269,7 +269,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
 
         # Copie vers le GPU
         drv.memcpy_htod(X_gpu, X)
-        y_gpu = drv.mem_alloc(y.nbytes) #############################################
+        y_gpu = drv.mem_alloc(y.nbytes)
 
         # Copie vers le GPU
         drv.memcpy_htod(y_gpu, y)
@@ -298,7 +298,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
     
 
         # Forward propagation (copy/paste inside forward_function previously defined)
-        start_fw=time.time()
+        # start_fw=time.time()
         z1 = forward_layer(X_gpu, W1, b1, M, N, K1)
         a1_gpu = drv.mem_alloc(M*K1*float_size)
         # z1_h=np.zeros((M,K1),dtype=np.float32)
@@ -332,23 +332,20 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         probs = np.zeros((M,K2),dtype=np.float32)
          
         drv.memcpy_dtoh(probs, probs_gpu) 
-        end_fw=time.time()
-        if i==0:
-           print("Time to compute the forward pass =", end_fw-start_fw)
+        # end_fw=time.time()
+        # if i==0:
+        #     print("Time to compute the forward pass =", end_fw-start_fw)
         # print("softmax result :")
         # print(probs) 
         # print("softmax wanted : ")
         # print(softmax_cpu(z2_h))    
         
         #print (probs[np.arange(probs.shape[0]), y])
-        start_l=time.time()
         
         correct_logprobs = np.log(probs[np.arange(probs.shape[0]), y])# Calculation of cross entropy for each example
         
         data_loss = -1./N * np.sum(correct_logprobs,axis=0,keepdims=True) # Loss totale
-        end_l=time.time()
-        if i==0:
-            print("loss computation time :",end_l-start_l)
+        
         
         
         # Backpropagation
@@ -357,10 +354,10 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
        # delta2 calculation
         # print("Probs :",probs.nbytes)
         # print("Y :", )
-        start_grad=time.time()
+        # start_grad=time.time()
         grid_size = (probs.shape[0] + TILE_DIM - 1) // TILE_DIM
         delta2_gpu = drv.mem_alloc(probs.nbytes)
-        
+        drv.Context.synchronize()
         compute_delta2(probs_gpu, y_gpu, delta2_gpu, np.int32(probs.shape[1]), np.int32(probs.shape[0]),
                     block=(probs.shape[0], 1, 1),
                     grid=(1,1))
@@ -482,17 +479,80 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         compute_db(delta1_gpu, db1_gpu, np.int32(K1), np.int32(M),b1,np.float32(epsilon),
                     block=(K1, 1, 1), 
                     grid=(1, 1))  # Gradient of the biais of the hidden layer
-        end_grad=time.time()
-        if i==0:
-            print("Time to compute the gradients =", end_grad-start_grad)
-     
+        # end_grad=time.time()
+        # if i==0:
+        #     print("Time to compute the gradients =", end_grad-start_grad)
+        # dW1_cpu=np.zeros_like(model["W1_np"])
+        # drv.memcpy_dtoh(dW1_cpu,dW1_gpu)
+        # dW1_h=np.dot(X.T,delta1_h)
+        # db1_h=np.zeros_like(model["b1_np"])
+        # drv.memcpy_dtoh(db1_h,db1_gpu)
+        # db1_cpu=np.sum(delta1_h,axis=0)
+
+        # print("Diff entre db1:")
+        # print(db1_cpu-db1_h)
+        
+        # Gradient descente
+        # new_W1=drv.mem_alloc(N*K1*float_size)
+        # new_W2=drv.mem_alloc(K1*K2*float_size)
+        # new_b1=drv.mem_alloc(K1*float_size)
+        # new_b2=drv.mem_alloc(K2*float_size)
+
+        
+        # update_weights(W1, dW1_gpu, new_W1, np.float32(epsilon), np.int32(K1), np.int32(M),
+        #                 block=(TILE_DIM, 1, 1), 
+        #                 grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+
+        # new_W1_h=np.zeros_like(model["W1_np"])
+        # drv.memcpy_dtoh(new_W1_h,new_W1)
+        # print("Result update_weights :")
+        # print(new_W1_h)
+        # print("Diff with previous")
+        # print(new_W1_h-model["W1_np"])
+        # new_W1_cpu=model["W1_np"]-epsilon*dW1_cpu
+        # print("Diff with expected :")
+        # print(new_W1_cpu-new_W1_h)
+
+
+        # update_bias(b1, db1_gpu, new_b1, np.float32(epsilon), np.int32(K1), 
+        #             block=(TILE_DIM, 1, 1),
+        #             grid=((K1 + TILE_DIM - 1) // TILE_DIM, 1))
+        # new_b1_h=np.zeros_like(model["b1_np"])
+        # drv.memcpy_dtoh(new_b1_h,new_b1)
+        # print("Result update_biais :")
+        # print(new_b1_h)
+        # print("Diff with previous :")
+        # print(new_b1_h-model["b1_np"])
+
+        # update_weights(W2, dW2_gpu, new_W2, np.float32(epsilon), np.int32(K2), np.int32(K1), 
+        #                 block=(TILE_DIM, 1, 1), 
+        #                 grid=((K1 + TILE_DIM - 1) // TILE_DIM,1))
+        # new_W2_h=np.zeros_like(model["W2_np"])
+        # drv.memcpy_dtoh(new_W2_h,new_W2)
+        # print("Result update_weights 2:")
+        # print(new_W2_h)
+        # print("Diff with previous")
+        # print(new_W2_h-model["W2_np"])
+        # new_W2_cpu=model["W2_np"]-epsilon*dW2_h
+        # print("Diff with expected :")
+        # print(new_W2_cpu-new_W2_h)
+        
+        # update_bias(b2, db2_gpu, new_b2, np.float32(epsilon), np.int32(K2), 
+        #             block=(TILE_DIM, 1, 1), 
+        #             grid=((M + TILE_DIM - 1) // TILE_DIM, 1))
+        
         #Updating weights and biases
         
         W1 = dW1_gpu
         W2= dW2_gpu
         b1=db1_gpu        
         b2=db2_gpu 
-        
+        end= time.time()
+        elapsed_time=end-start
+        with open('../data/epoch_timeslvl2.txt', 'a') as file:
+            file.write(f"{i} {elapsed_time}\n")
+        if i==0:
+            print("Time to compute 1 epoch =", end-start)
         start_f=time.time()
         a1_gpu.free()
         z1.free()
@@ -510,23 +570,13 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         y_gpu.free()
         W2_T.free()
         end_f=time.time()
-        end= time.time()
-        elapsed_time=end-start
-        #print("elapsed:", elapsed_time)
-        if i==0:
-            print("elapsed time for 1 epoch:", elapsed_time)
-            with open('../data/epoch_timeslvl2.txt', 'a') as file:
-                file.write(f"{K1} {elapsed_time}\n")
-        # if i==0 :
-        #     print("Freeing time : ",end_f-start_f)
+        if i==0 :
+            print("Freeing time : ",end_f-start_f)
         # Loss display
         if print_loss and i % 1 == 0:
           print("Loss at epoch %i: %f" %(i, data_loss))
     end_loop=time.time()
-    loop_time=end_loop-start_loop
-    # print("Looping time : ", end_loop-start_loop)
-    with open('../data/loop_timeslvl2.txt', 'a') as file:
-        file.write(f"{nn_hdim} {loop_time}\n")
+    print("Looping time : ", end_loop-start_loop)
     start_t=time.time()
     model['W1']=W1
     model['b1']=b1
@@ -546,7 +596,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
     drv.memcpy_dtoh(b2_h,b2)
     model['b2_np']=b2_h
     end_t=time.time()
-    # print("Transfer time : ", end_t-start_t)
+    print("Transfer time : ", end_t-start_t)
 
     return model
 ######################## PREDICTION FUNCTION ###############
@@ -606,32 +656,29 @@ def predict(model, x):
 
 ########################## TEST ########################## number of examples in the training set
 
-np.random.seed(1)
-X, y = sklearn.datasets.make_moons(600, noise=0.1)
-X = np.ascontiguousarray(X, dtype=np.float32)
-#y_temp=y.copy()
-y= np.ascontiguousarray(y, dtype=np.int32)
-#y = np.ascontiguousarray(y, dtype=np.float32)
-N =  len(X) #TODO size of the dataset
-
-# dimension of the input
-d_input = 2 #TODO 2 input features (x,y for each datpoints)
-
-# dimension of the output
-d_output = 2 #TODO to final classes for our classification problem
-
-# dimension of the hidden layer i.e. number of neurons in the hidden layer
-#d_hidden = 2 #TODO 
+digits = sklearn.datasets.load_digits()
+n_samples = len(digits.images)
+data = digits.images.reshape((n_samples, -1))
 
 
 
-# learning rate for the gradient descente algorithm
-epsilon = 0.01 #TODO
-with open('../data/epoch_timeslvl2.txt', 'w') as file:
-        pass
-with open('../data/loop_timeslvl2.txt', 'w') as file:
-    pass
-for d_hidden in [2,4,8,16,32,64,128,256,512,1024]:
+X =  digits.images.reshape((n_samples, -1)) # We reshape the images into vector
+X=np.ascontiguousarray(X)
+print(X)
+
+y = digits.target
+print(y)
+#y= np.ascontiguousarray(y)
+
+N = len(X) 
+d_input = 8*8 #TODO The image shape is 8x8 pixels
+d_output = 10 #TODO We the classes (numbers from 0 to 9)
+#d_hidden = 20 
+
+# Gradient descent parameter
+epsilon = 0.001 
+
+for d_hidden in [32]:
     model = init_model(d_input,d_hidden,d_output)
     start= time.time()
     model = train_model(model,d_hidden, num_epochs=3000, print_loss=False)
@@ -643,81 +690,7 @@ print("The final accuracy obtained is :", accuracy(y, predict(model, X)))
 def forward_layer_cpu(X, W, b):
     v= np.dot(X,W)
     return v+b
-def plot_perf():
-    # Lire les données des fichiers texte
-    with open('../data/loop_timeslvl0.txt', 'r') as file:
-        loop_lvl0 = file.readlines()
-    with open('../data/loop_timeslvl2.txt', 'r') as file:
-        loop_lvl2 = file.readlines()
-    with open('../data/epoch_timeslvl0.txt', 'r') as file:
-        epoch_lvl0 = file.readlines()
-    with open('../data/epoch_timeslvl2.txt', 'r') as file:
-        epoch_lvl2 = file.readlines()
 
-    # Initialiser les listes pour stocker les valeurs
-    loop_lvl0_x = []
-    loop_lvl0_y = []
-    loop_lvl2_x = []
-    loop_lvl2_y = []
-    epoch_lvl0_x = []
-    epoch_lvl0_y = []
-    epoch_lvl2_x = []
-    epoch_lvl2_y = []
-
-    # Extraire les valeurs pour les boucles niveau 0
-    for line in loop_lvl0:
-        parts = line.split()
-        if len(parts) == 2:
-            loop_lvl0_x.append(float(parts[0]))
-            loop_lvl0_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les boucles niveau 2
-    for line in loop_lvl2:
-        parts = line.split()
-        if len(parts) == 2:
-            loop_lvl2_x.append(float(parts[0]))
-            loop_lvl2_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les époques niveau 0
-    for line in epoch_lvl0:
-        parts = line.split()
-        if len(parts) == 2:
-            epoch_lvl0_x.append(float(parts[0]))
-            epoch_lvl0_y.append(float(parts[1]))
-
-    # Extraire les valeurs pour les époques niveau 2
-    for line in epoch_lvl2:
-        parts = line.split()
-        if len(parts) == 2:
-            epoch_lvl2_x.append(float(parts[0]))
-            epoch_lvl2_y.append(float(parts[1]))
-
-    # Créer une figure avec deux sous-graphiques
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-    print(loop_lvl0)
-    # Tracer les données des boucles
-    ax1.plot(loop_lvl0_x, loop_lvl0_y, marker='o', linestyle='-', color='b', label='Level 0')
-    ax1.plot(loop_lvl2_x, loop_lvl2_y, marker='s', linestyle='-', color='r', label='Level 2')
-    ax1.set_xlabel('X-axis')
-    ax1.set_ylabel('Y-axis')
-    ax1.set_title('Comparaison des boucles (Loop)')
-    ax1.legend()
-    ax1.grid(True)
-
-    # Tracer les données des époques
-    ax2.plot(epoch_lvl0_x, epoch_lvl0_y, marker='o', linestyle='-', color='b', label='Level 0')
-    ax2.plot(epoch_lvl2_x, epoch_lvl2_y, marker='s', linestyle='-', color='r', label='Level 2')
-    ax2.set_xlabel('X-axis')
-    ax2.set_ylabel('Y-axis')
-    ax2.set_title('Comparaison des époques (Epoch)')
-    ax2.legend()
-    ax2.grid(True)
-
-    # Ajuster les espaces entre les sous-graphiques
-    plt.tight_layout()
-
-    # Afficher les graphiques
-    plt.show()
 def predict_cpu(model, x):
     W1, b1, W2, b2 = model['W1_np'], model['b1_np'], model['W2_np'], model['b2_np']
     # Forward propagation, like before
@@ -727,25 +700,3 @@ def predict_cpu(model, x):
     exp_scores =np.exp(z2)
     probs = exp_scores/np.sum(exp_scores)
     return np.argmax(probs, axis=1)
-#### display function
-def plot_decision_boundary(pred_func):
-    """
-    Shows the decision boundaries of a binary prediction function.
-    """
-    # Set grid dimensions and give some margin for display
-    x_min, x_max = X[:, 0].min() - 0.5, X[:, 0].max() + 0.5
-    y_min, y_max = X[:, 1].min() - 0.5, X[:, 1].max() + 0.5
-    h = 0.01
-    # Generate the grid of points with a distance of h between them
-    xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-    
-    # Drawing the decision boundary
-    Z = pred_func(np.c_[xx.ravel(), yy.ravel()])
-    Z = Z.reshape(xx.shape)
-    # Show contour and training points
-    plt.contourf(xx, yy, Z, cmap=plt.cm.Spectral)
-    plt.scatter(X[:, 0], X[:, 1], c=y, cmap=plt.cm.Spectral)
-# plot_decision_boundary(lambda v: predict_cpu(model,v))
-# plt.title("Decision Boundary for hidden layer size 3")
-# plt.show()
-plot_perf()
