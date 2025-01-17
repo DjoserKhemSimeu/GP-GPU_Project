@@ -2,7 +2,7 @@
 
 #include <float.h>
 
-#define TILE_DIM 16
+#define TILE_DIM 32
 extern "C" __global__ void dot_product(float *v1, float *v2, float *o, int n) {
     extern __shared__ float sdata[];
     unsigned int tid = threadIdx.x;
@@ -112,6 +112,7 @@ extern "C" __global__ void transpose(float *in, float *out, unsigned int nx, uns
         out[iy*nx+ix]=in[ix*ny+iy];
     }
 }
+
 extern "C" __global__ void cross_entropy(float *probs, int *y, float *out, unsigned int n, unsigned int num_classes) {
     unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
     if (ix < n) {
@@ -187,7 +188,7 @@ extern "C" __global__ void compute_delta2(float *probs, int *y_true, float *out,
     }
 }
 extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row,float * b, float epsilon) {
-    unsigned int col = threadIdx.x;
+    unsigned int col = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (col < n_col) {
         float acc = 0.0f;

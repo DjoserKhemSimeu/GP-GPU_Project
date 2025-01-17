@@ -434,7 +434,7 @@ def train_model(model, nn_hdim, num_epochs=1, print_loss=False):
         # w2_trans=np.zeros((K2,K1),dtype=np.float32)
         # drv.memcpy_dtoh(w2_trans,W2_T)
         # print("Trans W2 :")
-        # print(w2_trans.shape)
+        # print(w2_trans)
 
         # print("Wanted trans :")
         # print(model["W2_np"].T)
@@ -634,7 +634,7 @@ with open('../data/loop_timeslvl2.txt', 'w') as file:
 for d_hidden in [2,4,8,16,32,64,128,256,512,1024]:
     model = init_model(d_input,d_hidden,d_output)
     start= time.time()
-    model = train_model(model,d_hidden, num_epochs=3000, print_loss=False)
+    model = train_model(model,d_hidden, num_epochs=1, print_loss=False)
     end=time.time()
     print(f"N_Hidden : {d_hidden}   Training time : {end-start}")
 
