@@ -236,10 +236,43 @@ Present the hardware (GPU-CPU)/ Software(pyCuda/Numpy) used to perform the perfo
 compare the results observed by comparing the performance between gpu an cpu (runtime), explain why it is complicate to perform a strong scaling because of the fixed size of the problem.
 #### Roofline model
 Present the roofline model of all the kernel defined in our problem : compute the computational intensity (Nb_FLOP/load-store opération), mesure the time needed for the computation of th kernel , draw the roofline by consulting the hardware spécifications (peak processing throughput, the bandwidth) 
-## Conclusion and discussion
+### Conclusion and discussion
 Present the limitation of the project:
 + Don't take into account optimization method such that SGD
 + Don't consider Weight decay regularization method
 + the usage of pycuda can introduce some cost in the comunication
 + The approach was applied only on the make_two_moon dataset.
 Present futher improvement.
+
+## Performance analysis 
+### Comparison with numpy :
+![Nash_results_2](images/Comparison_Numpy_GPU_Nash.png)
+### Roofline model : 
+computational intensity = FLOPS/memory accesses
+#### Matrix multiplication :
+$Number of FLOPS = TILE_DIM * 2 * ((N * TILE_DIM - 1)/TILE_DIM)$
+$Number of global memory accesses = 2 * ((N * TILE_DIM - 1)/TILE_DIM) + 1$
+#### Add bias :
+$Number of FLOPS = 1$
+$Number of global memory accesses = 3$
+#### Sigmoid activation :
+$Number of FLOPS = 2$
+$Number of global memory accesses = 2$
+#### Softmax activation :
+$Number of FLOPS ~ N * 11 + 11 $ 
+$Number of memory accesses = N + 2$
+#### Compute delta1 : 
+$Number of FLOPS = 5$
+$Number of memory accesses = 3$
+#### Compute delta2 : 
+$Number of FLOPS = 1$
+$Number of classes = Num_class * 2 + 1$
+#### Transposition :
+$Number of FLOPS = 0$
+$Number of memory accesses = 2$ 
+#### Compute derivative W :
+$Number of FLOPS = TILE_DIM * 2 * ((N * TILE_DIM - 1)/TILE_DIM) + 2$
+$Number of global memory accesses = 2 * ((N * TILE_DIM - 1)/TILE_DIM) + 2$
+#### Compute derivative b :
+$Number of FLOPS = N + 2$
+$Number of memory accesses = N + 3$
