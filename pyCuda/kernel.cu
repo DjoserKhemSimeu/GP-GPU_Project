@@ -174,7 +174,8 @@ extern "C" __global__ void softmax(float *A, float *B, int M, int N) {
         __syncthreads();
 
         // Calculer le softmax
-        B[row * N + col] = exp(A[row * N + col]) / row_sum[threadIdx.y];
+        
+        B[row * N + col] = exp(A[row * N + col]) /row_sum[threadIdx.y];
     }
 }
 extern "C" __global__ void compute_delta2(float *probs, int *y_true, float *out, unsigned int num_classes, unsigned int n) {

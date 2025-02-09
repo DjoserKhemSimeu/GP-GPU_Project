@@ -290,10 +290,9 @@ def forward_function(model, X):
 
 ################# TRAINING FUNCTION ###################
 def softmax_cpu(x):
-    """Compute softmax values for each sets of scores in x."""
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum(axis=0) # only difference
-def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
+    exp_scores = np.exp(x)
+    return exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+def train_model(model, nn_hdim, num_epochs=1,epsilon=0.001, print_loss=False):
 
     params = model.param
     float_size=sys.getsizeof(float)
@@ -326,6 +325,7 @@ def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
         start_fw=time.time()
 
         activations = [X_gpu]
+        activations_cpu=[X]
         zs = []
         # print(" FORWARD PASS ::")
         for j, (w, b) in enumerate(zip(params["W_gpu"], params["b_gpu"])):
@@ -351,14 +351,15 @@ def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
             
             
         
-            # z_h=np.zeros((M,K1),dtype=np.float32)
-            # drv.memcpy_dtoh(z_h,z)
+            z_h=np.zeros((M,K1),dtype=np.float32)
+            drv.memcpy_dtoh(z_h,z)
             # print("Obtained : ",z_h)
             # print("Diff : " , z_h-wanted)
             
             
 
             zs.append(z)
+            act_cpu=np.zeros((M,K1),dtype=np.float32)
             act_gpu=drv.mem_alloc(M*K1*float_size)
             if j < len(params["W_gpu"]) - 1:  # Apply the sigmoid on the hidden layer
                 sigmoid_activation(z, act_gpu, np.int32(M), np.int32(K1),
@@ -368,8 +369,11 @@ def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
                 softmax(z, act_gpu, np.int32(M), np.int32(K1),
                         block=(TILE_DIM, TILE_DIM, 1), 
                         grid=((K1 + TILE_DIM - 1) // TILE_DIM, (M + TILE_DIM - 1) // TILE_DIM))
+                want_soft=softmax_cpu(z_h)
             activations.append(act_gpu)
-            
+            # drv.memcpy_dtoh(act_cpu,act_gpu)
+            # activations_cpu.append(act_cpu)
+        
         probs_gpu=activations[-1]
         # Forward propagation (copy/paste inside forward_function previously defined)
         
@@ -377,7 +381,7 @@ def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
         probs = np.zeros((M,K_out),dtype=np.float32)
          
         drv.memcpy_dtoh(probs, probs_gpu) 
-        # print(probs)
+        #print(probs)
         
         # if i==0:
         #    print("Time to compute the forward pass =", end_fw-start_fw)
@@ -510,17 +514,17 @@ def train_model(model, nn_hdim, num_epochs=1,epsilon=0.01, print_loss=False):
         end= time.time()
         elapsed_time=end-start
         #print("elapsed:", elapsed_time)
-        # if i==0:
-        #     print("elapsed time for 1 epoch:", elapsed_time)
-        #     with open(f'../data/epoch_timeslvl3_{TILE_DIM}.txt', 'a') as file:
-        #         file.write(f"{nn_hdim[1]} {elapsed_time}\n")
+        if i==0:
+            print("elapsed time for 1 epoch:", elapsed_time)
+            with open(f'../data/epoch_timeslvl3_{TILE_DIM}.txt', 'a') as file:
+                file.write(f"{nn_hdim[1]} {elapsed_time}\n")
         if print_loss and i % 1 == 0:
           print("Loss at epoch %i: %f" %(i, data_loss))
     end_loop=time.time()
     loop_time=end_loop-start_loop
-    # print("Looping time : ", end_loop-start_loop)
-    # with open(f'../data/loop_timeslvl3_{TILE_DIM}.txt', 'a') as file:
-    #     file.write(f"{nn_hdim[1]} {loop_time}\n")
+    print("Looping time : ", end_loop-start_loop)
+    with open(f'../data/loop_timeslvl3_{TILE_DIM}.txt', 'a') as file:
+        file.write(f"{nn_hdim[1]} {loop_time}\n")
     for i in range(len(params['W_gpu'])):
         W_h=np.zeros_like(params['W_np'][i])
         drv.memcpy_dtoh(W_h,params['W_gpu'][i])
@@ -615,7 +619,7 @@ def predict_cpu(model, x):
     
     return np.argmax(probs,axis=1)
 np.random.seed(1)
-X, y = sklearn.datasets.make_moons(600, noise=0.2)
+X, y = sklearn.datasets.make_moons(600, noise=0.01)
 X = np.ascontiguousarray(X, dtype=np.float32)
 #y_temp=y.copy()
 y= np.ascontiguousarray(y, dtype=np.int32)
@@ -634,18 +638,18 @@ d_output = 2 #TODO to final classes for our classification problem
 d_input = 2
 d_hidden = [32,32,32,32] # 4 hidden layers with 32 neurons for each ones
 d_output = 2
-# with open(f'../data/epoch_timeslvl3_{TILE_DIM}.txt', 'w') as file:
-#     pass
-# with open(f'../data/loop_timeslvl3_{TILE_DIM}.txt', 'w') as file:
-#     pass
-for h in [32]:
+with open(f'../data/epoch_timeslvl3_{TILE_DIM}.txt', 'w') as file:
+    pass
+with open(f'../data/loop_timeslvl3_{TILE_DIM}.txt', 'w') as file:
+    pass
+for h in [2,4,8,16,32,64,128,254,512,1024]:
     d_hidden = [h]*4
     model = init_model(d_input, d_hidden, d_output)
 
     start= time.time()
-    model = train_model(model,d_hidden, num_epochs=10000, print_loss=True)
+    model = train_model(model,d_hidden, num_epochs=1000, print_loss=False)
     end=time.time()
-    print(f"N_Hidden : {d_hidden[1]}   Training time : {end-start}")
+    print(f"N_Hidden : {d_hidden[0]}   Training time : {end-start}")
 
 
     print("The final accuracy obtained is :", accuracy(y, predict_cpu(model, X)))

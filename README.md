@@ -207,3 +207,39 @@ We can see that we don't have a big difference between the result and the expect
 ## Perfoormance comparison between Numpy VS Cuda implementation
 ![Nash_results](images/Nash_comparison_plot.png)
 As we can see on the graph, by comparing 
+# Sunday 9 february
+## Report Structure
+### Abstract 
+Overview about the goal of the project + briefly present the results observed (write that in last)
+### Introduction
+Presenting the crux of the problem (why do we need to parallelize MLP) and explain the structure of the report.
+### Design Methodology
+Present the methodology of the project
+#### Mathematical foundations of MLP
+Present the mathematical background of MLP such that :
++ MLP architecture
+  + Activation function
+  + Forward pass
++ Supervised learning for classification
+ + Datset (X,Y) (sigmoid + softmax)
+ + Loss function (cross entropy)
++ Gradient descent algorithm
++ Back-Propagation
+#### Cuda kernel implementation
+prensent all the cuda kernel defined to implement the MLP training process with GPU parallelization (illustrate with scheme)
+#### Evaluation of the model 
+Explain the model is train on the dataset two moon 
+### Results/Analysis
+#### Hardware/software used
+Present the hardware (GPU-CPU)/ Software(pyCuda/Numpy) used to perform the performance analysis
+#### Comparison GPU/CPU
+compare the results observed by comparing the performance between gpu an cpu (runtime), explain why it is complicate to perform a strong scaling because of the fixed size of the problem.
+#### Roofline model
+Present the roofline model of all the kernel defined in our problem : compute the computational intensity (Nb_FLOP/load-store opération), mesure the time needed for the computation of th kernel , draw the roofline by consulting the hardware spécifications (peak processing throughput, the bandwidth) 
+## Conclusion and discussion
+Present the limitation of the project:
++ Don't take into account optimization method such that SGD
++ Don't consider Weight decay regularization method
++ the usage of pycuda can introduce some cost in the comunication
++ The approach was applied only on the make_two_moon dataset.
+Present futher improvement.
