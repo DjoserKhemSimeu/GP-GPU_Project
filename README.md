@@ -218,10 +218,10 @@ Present the methodology of the project
 #### Mathematical foundations of MLP
 Present the mathematical background of MLP such that :
 + MLP architecture
-  + Activation function
+  + Activation function (sigmoid, softmax)
   + Forward pass
 + Supervised learning for classification
- + Datset (X,Y) (sigmoid + softmax)
+ + Datset (X,Y) 
  + Loss function (cross entropy)
 + Gradient descent algorithm
 + Back-Propagation
