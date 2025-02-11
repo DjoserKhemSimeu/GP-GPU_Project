@@ -259,7 +259,8 @@ $Number of global memory accesses = 3$
 $Number of FLOPS = 2$
 $Number of global memory accesses = 2$
 #### Softmax activation :
-$Number of FLOPS ~ N * 11 + 11 $ 
+Let's consider that $exp(x)$ is a single floating point operation
+$Number of FLOPS ~ N * 2+ 2 $ 
 $Number of memory accesses = N + 2$
 #### Compute delta1 : 
 $Number of FLOPS = 5$
@@ -270,9 +271,58 @@ $Number of classes = Num_class * 2 + 1$
 #### Transposition :
 $Number of FLOPS = 0$
 $Number of memory accesses = 2$ 
-#### Compute derivative W :
+#### Compute derivative W:
 $Number of FLOPS = TILE_DIM * 2 * ((N * TILE_DIM - 1)/TILE_DIM) + 2$
 $Number of global memory accesses = 2 * ((N * TILE_DIM - 1)/TILE_DIM) + 2$
 #### Compute derivative b :
 $Number of FLOPS = N + 2$
 $Number of memory accesses = N + 3$
+#### NVIDIA SMI on Nash :
+
+``` shell
+ +-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 565.57.01              Driver Version: 565.57.01      CUDA Version: 12.7     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  Quadro RTX 6000                On  |   00000000:3B:00.0 Off |                    0 |
+| N/A   32C    P8             24W /  250W |       1MiB /  23040MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  Quadro RTX 6000                On  |   00000000:AF:00.0 Off |                    0 |
+| N/A   30C    P8             13W /  250W |       1MiB /  23040MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+                                                                                         
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI        PID   Type   Process name                              GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+
+```
+##### Nvidia Quadro RTX 6000 :
+FP32 Performance = 16.31 TFLOPS
+Banddwidth = 672.0 GB/s
+#### Time of running on Nash each kernel :
+
+``` shell
+N = 256
+M = 256
+TILE_DIM = 32
+
+matrix_multiplication: 0.000475199997 ms
+transpose: 0.000044960000 ms
+sigmoid_activation: 0.000018784000 ms
+softmax: 0.000038816001 ms
+compute_delta2: 0.000049247999 ms
+compute_db: 0.000034912001 ms
+compute_dW: 0.000045248002 ms
+compute_delta1: 0.000016160000 ms
+
+```
+

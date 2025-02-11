@@ -1,0 +1,8 @@
+matrix_multiplication: 0.000475199997 ms
+transpose: 0.000044960000 ms
+sigmoid_activation: 0.000018784000 ms
+softmax: 0.000038816001 ms
+compute_delta2: 0.000049247999 ms
+compute_db: 0.000034912001 ms
+compute_dW: 0.000045248002 ms
+compute_delta1: 0.000016160000 ms
