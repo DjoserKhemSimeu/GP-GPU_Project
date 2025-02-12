@@ -267,7 +267,7 @@ $Number of FLOPS = 5$
 $Number of memory accesses = 3$
 #### Compute delta2 : 
 $Number of FLOPS = 1$
-$Number of classes = Num_class * 2 + 1$
+$Number of memory accesses = Num_class * 2 + 1$
 #### Transposition :
 $Number of FLOPS = 0$
 $Number of memory accesses = 2$ 
@@ -314,15 +314,58 @@ Banddwidth = 672.0 GB/s
 N = 256
 M = 256
 TILE_DIM = 32
-
-matrix_multiplication: 0.000475199997 ms
-transpose: 0.000044960000 ms
-sigmoid_activation: 0.000018784000 ms
-softmax: 0.000038816001 ms
-compute_delta2: 0.000049247999 ms
-compute_db: 0.000034912001 ms
-compute_dW: 0.000045248002 ms
-compute_delta1: 0.000016160000 ms
+matrix_multiplication: 4.75199997e-07 s
+add_bias: 5.04e-07 s
+transpose: 4.49600000e-08 s
+sigmoid_activation: 1.87840000e-08 s
+softmax: 3.88160001e-08 s
+compute_delta2: 4.92479990e-08 s
+compute_db: 3.49120001e-08 s
+compute_dW: 4.52480002e-08 s
+compute_delta1: 1.61600000e-08 s
 
 ```
-
+#### FLOPS : FLOPs/time(s)
++ Matrix multiplication : 
+  + FLOPs = 16382
+  + MEM ~ 513
+  + Operational intensity ~ 32
+  + FLOPS = 3.447e10
++ Add bias :
+  + FLOPs = 1
+  + MEM = 3
+  + Operational intensity = 0.33333
+  + FLOPS = 1.984126e6
++ Sigmoid :
+  + FLOPs = 2
+  + MEM = 2
+  + Operational intensity = 1
+  + FLOPS = 1,06473594e8
++ Softmax :
+  + FLOPs = 514
+  + MEM = 258
+  + Operational intensity ~ 2
+  + FLOPS = 1.324196208e10
++ Compute delta1 :
+  + FLOPs = 5
+  + MEM = 3
+  + Operational intensity = 1.6667
+  + FLOPS = 3.09405940e8
++ Compute delta2 :
+  + FLOPs = 1
+  + MEM = 513
+  + Operational intensity = 1.949e-3
+  + FLOPS = 2.0305393e7
++ Compute derivative W :
+  + FLOPs = 16384
+  + MEM ~ 514
+  + Operational intensity = 31.8754
+  + FLOPS = 3,6209335e11
++ Compute derivative b :
+  + FLOPs = 258
+  + MEM = 259
+  + Operational intensity ~ 1
+  + FLOPS = 7.390009166e9
+![Roofline](images/Roofline_model.pdf)
+  
+  
