@@ -366,6 +366,6 @@ compute_delta1: 1.61600000e-08 s
   + MEM = 259
   + Operational intensity ~ 1
   + FLOPS = 7.390009166e9
-![Roofline](images/Roofline_model.pdf)
+![Roofline](images/Roofline_model.png)
   
   
