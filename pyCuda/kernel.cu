@@ -1,169 +1,115 @@
 
 
 #include <float.h>
+// Kernels definiton file
+
 
 #define TILE_DIM 32
-extern "C" __global__ void dot_product(float *v1, float *v2, float *o, int n) {
-    extern __shared__ float sdata[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-    sdata[tid]=0;
-    __syncthreads();    
-    if (i < n) {
-        sdata[tid] = v1[i] * v2[i];
-    }
-    __syncthreads();
-    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata[tid] += sdata[tid + s];
-        }
-        __syncthreads();
-    }
-    if (tid == 0) {
-        o[blockIdx.x] = sdata[0];
-    }
-}
 
 
-extern "C" __global__ void reduce(float *v1, float *o, int n) {
-    extern __shared__ float sdata2[];
-    unsigned int tid = threadIdx.x;
-    unsigned int i = blockIdx.x * blockDim.x + threadIdx.x;
-
-    sdata2[tid]=0;
-    __syncthreads();    
-   
-    if (i < n) {
-        sdata2[tid] = v1[i];
-    }
-    __syncthreads();
-
-    
-    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
-        if (tid < s) {
-            sdata2[tid] += sdata2[tid + s];
-        }
-        __syncthreads();
-    }
-
-    
-    if (tid == 0) {
-        o[blockIdx.x] = sdata2[0];
-    }
-}
 extern "C" __global__ void MatMul(float* A, float* B, float* C, int ARows, int ACols, int BCols) {
-    // Calcul de l'indice de la ligne et de la colonne
+    // Calculate the row and column index
     int Row = blockIdx.y * TILE_DIM + threadIdx.y;
     int Col = blockIdx.x * TILE_DIM + threadIdx.x;
-    
-    // Déclaration de la variable qui va stocker la valeur du produit scalaire
+
+    // Declare the variable that will store the dot product value
     float CValue = 0.0;
 
-    // Partage des blocs pour les matrices A et B
+    // Shared memory for the tiles of matrices A and B
     __shared__ float As[TILE_DIM][TILE_DIM];
     __shared__ float Bs[TILE_DIM][TILE_DIM];
 
-    // Boucle sur les "tiles" (blocs de sous-matrices)
+    // Loop over the tiles
     for (int k = 0; k < (ACols + TILE_DIM - 1) / TILE_DIM; ++k) {
-        // Charger les sous-matrices A et B dans les mémoires partagées
+        // Load the sub-matrices A and B into shared memory
         if (Row < ARows && (k * TILE_DIM + threadIdx.x) < ACols) {
             As[threadIdx.y][threadIdx.x] = A[Row * ACols + k * TILE_DIM + threadIdx.x];
         } else {
             As[threadIdx.y][threadIdx.x] = 0.0;
         }
-        
+
         if (Col < BCols && (k * TILE_DIM + threadIdx.y) < ACols) {
             Bs[threadIdx.y][threadIdx.x] = B[(k * TILE_DIM + threadIdx.y) * BCols + Col];
         } else {
             Bs[threadIdx.y][threadIdx.x] = 0.0;
         }
 
-        // Synchroniser les threads avant de commencer les calculs
+        // Synchronize threads before starting the computation
         __syncthreads();
 
-        // Calcul du produit scalaire pour cette "tile"
+        // Compute the dot product for this tile
         for (int n = 0; n < TILE_DIM; ++n) {
             CValue += As[threadIdx.y][n] * Bs[n][threadIdx.x];
         }
 
-        // Synchroniser les threads après le calcul
+        // Synchronize threads after the computation
         __syncthreads();
     }
 
-    // Écrire la valeur calculée dans la matrice C si elle est dans les limites
+    // Write the computed value to matrix C if within bounds
     if (Row < ARows && Col < BCols) {
         C[Row * BCols + Col] = CValue;
     }
 }
+
+
 extern "C" __global__ void add_bias(float *A, float *B, float *C, int M, int N) {
+    // Calculate the row and column index for the thread
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
-    
+
+    // Check if the thread is within the bounds of the matrix
     if (row < M && col < N) {
-        C[row * N + col] = A[row * N + col] + B[col];  // Ajout du biais à chaque ligne
+        // Add the bias from vector B to each element in the corresponding row of matrix A
+        // Store the result in matrix C
+        C[row * N + col] = A[row * N + col] + B[col];
     }
 }
+
+
 extern "C" __global__ void transpose(float *in, float *out, unsigned int nx, unsigned int ny) {
-    
+    // Calculate the x and y indices for the thread
     unsigned int ix = blockIdx.x * blockDim.x + threadIdx.x;
     unsigned int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
+    // Check if the thread is within the bounds of the matrix
     if (ix < nx && iy < ny) {
-        out[iy*nx+ix]=in[ix*ny+iy];
+        // Transpose the matrix by swapping the row and column indices
+        // Store the transposed element in the output matrix
+        out[iy * nx + ix] = in[ix * ny + iy];
     }
 }
 
-extern "C" __global__ void cross_entropy(float *probs, int *y, float *out, unsigned int n, unsigned int num_classes) {
-    unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
-    if (ix < n) {
-        out[ix] = -log(probs[ix * num_classes + y[ix]]);
-    }
-}
 
-extern "C" __global__ void add (float * WX, float * b, float * out,unsigned int n){
-    unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
-    if (ix < n) {
-        out[ix] = WX[ix]+b[ix];
-    }
-}
+// Device function to compute the sigmoid of a value
 __device__ float sigmoid(float x) {
+    // Sigmoid function: 1 / (1 + e^(-x))
     return 1.0f / (1.0f + exp(-x));
 }
 
 extern "C" __global__ void sigmoid_activation(float *A, float *B, int M, int N) {
+    // Calculate the row and column index for the thread
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // Check if the thread is within the bounds of the matrix
     if (row < M && col < N) {
+        // Apply the sigmoid function to each element of matrix A
+        // Store the result in matrix B
         B[row * N + col] = sigmoid(A[row * N + col]);
     }
 }
 
-extern "C" __global__ void exp_scores(float *A, float *B, int M, int N) {
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    if (row < M && col < N) {
-        // Trouver la valeur maximale pour la ligne entière
-        __shared__ float max_val[TILE_DIM];
-        if (threadIdx.x == 0) {
-            float max_tmp = -FLT_MAX;
-            for (int i = 0; i < N; ++i) {
-                max_tmp = fmaxf(max_tmp, A[row * N + i]);
-            }
-            max_val[threadIdx.y] = max_tmp;
-        }
-        __syncthreads();
-
-        // Soustraire max_val et calculer l'exponentielle
-        B[row * N + col] = exp(A[row * N + col] - max_val[threadIdx.y]);
-    }
-}
 extern "C" __global__ void softmax(float *A, float *B, int M, int N) {
+    // Calculate the row and column index for the thread
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (row < M && col < N) {
-        // Calculer la somme des exponentielles pour la ligne
+        // Shared memory to store the sum of exponentials for each row
         __shared__ float row_sum[TILE_DIM];
+
+        // Calculate the sum of exponentials for the current row
         if (threadIdx.x == 0) {
             float sum = 0.0f;
             for (int i = 0; i < N; ++i) {
@@ -171,104 +117,117 @@ extern "C" __global__ void softmax(float *A, float *B, int M, int N) {
             }
             row_sum[threadIdx.y] = sum;
         }
+
+        // Synchronize threads to ensure the sum is calculated before proceeding
         __syncthreads();
 
-        // Calculer le softmax
-        
-        B[row * N + col] = exp(A[row * N + col]) /row_sum[threadIdx.y];
+        // Compute the softmax for the current element
+        B[row * N + col] = exp(A[row * N + col]) / row_sum[threadIdx.y];
     }
 }
+
 extern "C" __global__ void compute_delta2(float *probs, int *y_true, float *out, unsigned int num_classes, unsigned int n) {
+    // Calculate the index for the thread
     unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
+
+    // Check if the thread is within the bounds of the data
     if (ix < n) {
+        // Copy the probabilities to the output array
         for (unsigned int j = 0; j < num_classes; ++j) {
             out[ix * num_classes + j] = probs[ix * num_classes + j];
         }
-        
+
+        // Subtract 1 from the probability of the true class
         out[ix * num_classes + y_true[ix]] -= 1.0f;
     }
 }
-extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row,float * b, float epsilon) {
+
+
+extern "C" __global__ void compute_db(float *delta, float *out, unsigned int n_col, unsigned int n_row, float *b, float epsilon) {
+    // Calculate the column index for the thread
     unsigned int col = blockDim.x * blockIdx.x + threadIdx.x;
 
+    // Check if the thread is within the bounds of the columns
     if (col < n_col) {
+        // Initialize an accumulator to sum the delta values for the current column
         float acc = 0.0f;
+
+        // Sum the delta values for the current column
         for (unsigned int i = 0; i < n_row; ++i) {
             acc += delta[i * n_col + col];
         }
-        // Stockez la somme calculée dans out
-        out[col] =b[col]-epsilon*acc;
 
+        // Store the computed sum in the output array, adjusted by epsilon and the bias term
+        out[col] = b[col] - epsilon * acc;
     }
 }
-extern "C" __global__ void compute_dW(float* A, float* B, float* C, int ARows, int ACols, int BCols,float * W, float epsilon) {
-    // Calcul de l'indice de la ligne et de la colonne
+
+
+extern "C" __global__ void compute_dW(float* A, float* B, float* C, int ARows, int ACols, int BCols, float *W, float epsilon) {
+    // Calculate the row and column index
     int Row = blockIdx.y * TILE_DIM + threadIdx.y;
     int Col = blockIdx.x * TILE_DIM + threadIdx.x;
-    
-    // Déclaration de la variable qui va stocker la valeur du produit scalaire
+
+    // Declare the variable that will store the dot product value
     float CValue = 0.0;
 
-    // Partage des blocs pour les matrices A et B
+    // Shared memory for the tiles of matrices A and B
     __shared__ float As[TILE_DIM][TILE_DIM];
     __shared__ float Bs[TILE_DIM][TILE_DIM];
 
-    // Boucle sur les "tiles" (blocs de sous-matrices)
+    // Loop over the tiles
     for (int k = 0; k < (ACols + TILE_DIM - 1) / TILE_DIM; ++k) {
-        // Charger les sous-matrices A et B dans les mémoires partagées
+        // Load the sub-matrices A and B into shared memory
         if (Row < ARows && (k * TILE_DIM + threadIdx.x) < ACols) {
             As[threadIdx.y][threadIdx.x] = A[Row * ACols + k * TILE_DIM + threadIdx.x];
         } else {
             As[threadIdx.y][threadIdx.x] = 0.0;
         }
-        
+
         if (Col < BCols && (k * TILE_DIM + threadIdx.y) < ACols) {
             Bs[threadIdx.y][threadIdx.x] = B[(k * TILE_DIM + threadIdx.y) * BCols + Col];
         } else {
             Bs[threadIdx.y][threadIdx.x] = 0.0;
         }
 
-        // Synchroniser les threads avant de commencer les calculs
+        // Synchronize threads before starting the computation
         __syncthreads();
 
-        // Calcul du produit scalaire pour cette "tile"
+        // Compute the dot product for this tile
         for (int n = 0; n < TILE_DIM; ++n) {
             CValue += As[threadIdx.y][n] * Bs[n][threadIdx.x];
         }
 
-        // Synchroniser les threads après le calcul
+        // Synchronize threads after the computation
         __syncthreads();
     }
 
-    // Écrire la valeur calculée dans la matrice C si elle est dans les limites
+    // Write the computed value to matrix C if within bounds
     if (Row < ARows && Col < BCols) {
-        C[Row * BCols + Col] = W[Row * BCols + Col]-epsilon*CValue;
+        // Update the weight matrix W with the gradient adjustment
+        C[Row * BCols + Col] = W[Row * BCols + Col] - epsilon * CValue;
     }
 }
+
+
+// Device function to compute the derivative of the sigmoid function
 __device__ float sigmoid_derivative(float x) {
+    // Compute the sigmoid of x
     float sigmoid = 1.0f / (1.0f + exp(-x));
+    // Return the derivative of the sigmoid function
     return sigmoid * (1.0f - sigmoid);
 }
+
 extern "C" __global__ void compute_delta1(float *delta2, float *z1, float *out, unsigned int n_col, unsigned int n_row) {
+    // Calculate the row and column index for the thread
     unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
     unsigned int iy = blockDim.y * blockIdx.y + threadIdx.y;
 
+    // Check if the thread is within the bounds of the matrix
     if (iy < n_row && ix < n_col) {
+        // Retrieve the corresponding element from z1
         float z = z1[iy * n_col + ix];
+        // Compute the delta value using the sigmoid derivative and delta2
         out[iy * n_col + ix] = sigmoid_derivative(z) * delta2[iy * n_col + ix];
-    }
-}
-extern "C" __global__ void update_weights (float * W, float* dW, float * out,float epsilon ,unsigned int n_col,unsigned int n_row){
-    unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
-    if (ix < n_row) {
-        for (unsigned int j = 0; j < n_col; ++j) {
-            out[ix * n_col + j] =W[ix * n_col + j] -epsilon * dW[ix * n_col + j] ;
-        }
-    }
-}
-extern "C" __global__ void update_bias (float * b, float* db, float * out,float epsilon ,unsigned int n){
-    unsigned int ix = blockDim.x * blockIdx.x + threadIdx.x;
-    if (ix < n) {
-        out[ix] = b [ix] - epsilon*db[ix];
     }
 }

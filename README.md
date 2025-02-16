@@ -2,8 +2,7 @@
 ### Djoser SIMEU M2 MOSIG 
 In the context of the GP-GPU computing project, I have as project to parallelize at GPU levels the computation of a MLP model for the trainning and the inference process.
 # Architecture of the project 
-The project is in python programming language with the usage of the pyCuda python library a NVIDIA Gpu Computing framework. I divided this project into two main part : The paralellization of an MLP model with one hidden layer, and the paralellization of an MLP model with $n$ hidden layer where $n$ is a parameters of the model. For both paralellization problems, I defined multiple parallelization levels where the levels 0 correspond to a sequential execution on CPU, their are modelized by the files ```main_lvlN.py```.
-# First Step : Matrix Computation parallelization
+The project is in python programming language with the usage of the pyCuda python library a NVIDIA Gpu Computing framework.
 The first objective is to only parallelize the matrix operation made on the program: 
 
 ``` python
@@ -125,8 +124,7 @@ And also I must think about which functions would be computed on gpu or cpu :
 + accuracy computation :cpu
 * NOTEBOOK
 # Thursday 12 december
-The goal is to modify the trainning function to stabilyze the learning. Actually the $plot_decision_boundary$ plot a quasi-random decision frontie after 1000 epochs:
-![decision_boundary](images/Figure_1.png)
+The goal is to modify the trainning function to stabilyze the learning. Actually the $plot_decision_boundary$ plot a quasi-random decision frontie after 1000 epochs.
 
 ``` shell
 Loss at epoch 996: 14.352945
@@ -206,7 +204,6 @@ We can see that we don't have a big difference between the result and the expect
 # Wednesday 8 january
 ## Perfoormance comparison between Numpy VS Cuda implementation
 ![Nash_results](images/Nash_comparison_plot.png)
-As we can see on the graph, by comparing 
 # Sunday 9 february
 ## Report Structure
 ### Abstract 
@@ -308,64 +305,39 @@ $Number of memory accesses = N + 3$
 ##### Nvidia Quadro RTX 6000 :
 FP32 Performance = 16.31 TFLOPS
 Banddwidth = 672.0 GB/s
-#### Time of running on Nash each kernel :
-
-``` shell
-N = 256
-M = 256
-TILE_DIM = 32
-matrix_multiplication: 4.75199997e-07 s
-add_bias: 5.04e-07 s
-transpose: 4.49600000e-08 s
-sigmoid_activation: 1.87840000e-08 s
-softmax: 3.88160001e-08 s
-compute_delta2: 4.92479990e-08 s
-compute_db: 3.49120001e-08 s
-compute_dW: 4.52480002e-08 s
-compute_delta1: 1.61600000e-08 s
-
-```
 #### FLOPS : FLOPs/time(s)
 + Matrix multiplication : 
   + FLOPs = 16382
   + MEM ~ 513
   + Operational intensity ~ 32
-  + FLOPS = 3.447e10
 + Add bias :
   + FLOPs = 1
   + MEM = 3
   + Operational intensity = 0.33333
-  + FLOPS = 1.984126e6
 + Sigmoid :
   + FLOPs = 2
   + MEM = 2
   + Operational intensity = 1
-  + FLOPS = 1,06473594e8
 + Softmax :
   + FLOPs = 514
   + MEM = 258
   + Operational intensity ~ 2
-  + FLOPS = 1.324196208e10
 + Compute delta1 :
   + FLOPs = 5
   + MEM = 3
   + Operational intensity = 1.6667
-  + FLOPS = 3.09405940e8
 + Compute delta2 :
   + FLOPs = 1
   + MEM = 513
   + Operational intensity = 1.949e-3
-  + FLOPS = 2.0305393e7
 + Compute derivative W :
   + FLOPs = 16384
   + MEM ~ 514
   + Operational intensity = 31.8754
-  + FLOPS = 3,6209335e11
 + Compute derivative b :
   + FLOPs = 258
   + MEM = 259
   + Operational intensity ~ 1
-  + FLOPS = 7.390009166e9
 ![Roofline](images/Roofline_model.png)
   
   
